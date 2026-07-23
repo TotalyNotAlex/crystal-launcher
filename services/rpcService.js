@@ -3,11 +3,6 @@ const path = require('path');
 const fs = require('fs');
 
 const CLIENT_ID = '1357924680';
-const DISCORD_IPC = process.env.XDG_RUNTIME_DIR
-  ? path.join(process.env.XDG_RUNTIME_DIR, 'discord-ipc-0')
-  : process.platform === 'win32'
-    ? '\\\\?\\pipe\\discord-ipc-0'
-    : path.join(os.tmpdir(), 'discord-ipc-0');
 
 class RPCService {
   constructor() {
@@ -15,21 +10,41 @@ class RPCService {
     this.connected = false;
     this.activity = null;
     this.retryTimer = null;
+    this._nonce = 0;
+  }
+
+  findPipe() {
+    if (process.platform === 'win32') {
+      for (let i = 0; i < 10; i++) {
+        const p = `\\\\?\\pipe\\discord-ipc-${i}`;
+        try { fs.accessSync(p); return p; } catch {}
+      }
+      return '\\\\?\\pipe\\discord-ipc-0';
+    }
+    const runtime = process.env.XDG_RUNTIME_DIR;
+    if (runtime) {
+      for (let i = 0; i < 10; i++) {
+        const p = path.join(runtime, `discord-ipc-${i}`);
+        if (fs.existsSync(p)) return p;
+      }
+    }
+    return path.join(process.env.TMPDIR || '/tmp', 'discord-ipc-0');
   }
 
   async connect() {
     if (this.connected) return;
     try {
       this.client = new net.Socket();
+      const pipePath = this.findPipe();
       await new Promise((resolve, reject) => {
-        this.client.connect(DISCORD_IPC, () => {
-          this.connected = true;
-          this.handshake();
-          resolve();
+        this.client.connect(pipePath, () => {
+          this.handshake().then(resolve).catch(reject);
         });
-        this.client.on('error', reject);
+        this.client.on('error', (e) => reject(e));
         setTimeout(() => reject(new Error('timeout')), 2000);
       });
+      this.connected = true;
+      if (this.activity) this.setActivity(this.activity);
     } catch {
       this.connected = false;
       this.retryTimer = setTimeout(() => this.connect(), 30000);
@@ -37,53 +52,59 @@ class RPCService {
   }
 
   handshake() {
-    if (!this.client) return;
-    const data = this.encode(0, { v: 1, client_id: CLIENT_ID });
-    this.client.write(data);
-    this.client.once('data', (buf) => {
-      const op = buf.readUInt32LE(4);
-      if (op === 2) this.connected = true;
+    return new Promise((resolve, reject) => {
+      const data = this.#encode(0, { v: 1, client_id: CLIENT_ID });
+      this.client.write(data);
+      this.client.once('data', (buf) => {
+        try {
+          const op = buf.readUInt32LE(0);
+          if (op === 2) resolve();
+          else reject(new Error('handshake failed'));
+        } catch { reject(new Error('handshake parse error')); }
+      });
+      setTimeout(() => reject(new Error('handshake timeout')), 2000);
     });
-    this.client.on('data', (buf) => this.handleMessage(buf));
-  }
-
-  handleMessage(buf) {
-    try {
-      const op = buf.readUInt32LE(4);
-      const len = buf.readUInt32LE(8);
-      if (len > 0) {
-        const str = buf.toString('utf8', 12, 12 + len);
-        const msg = JSON.parse(str);
-        if (msg.evt === 'ACTIVITY_JOIN') this.onJoin?.(msg.data.secret);
-      }
-    } catch {}
   }
 
   setActivity(activity) {
     this.activity = activity;
     if (!this.connected) return;
-    const data = this.encode(1, { cmd: 'SET_ACTIVITY', args: { activity, pid: process.pid } });
+    const nonce = ++this._nonce;
+    const data = this.#encode(1, {
+      cmd: 'SET_ACTIVITY',
+      args: { activity, pid: process.pid },
+      nonce: String(nonce),
+    });
     try { this.client?.write(data); } catch {}
   }
 
   clearActivity() {
     this.activity = null;
-    this.setActivity({});
+    if (!this.connected) return;
+    const nonce = ++this._nonce;
+    const data = this.#encode(1, {
+      cmd: 'SET_ACTIVITY',
+      args: { activity: {}, pid: process.pid },
+      nonce: String(nonce),
+    });
+    try { this.client?.write(data); } catch {}
   }
 
   disconnect() {
     if (this.retryTimer) clearTimeout(this.retryTimer);
-    try { this.client?.destroy(); } catch {}
-    this.connected = false;
+    this.clearActivity();
+    setTimeout(() => {
+      try { this.client?.destroy(); } catch {}
+      this.connected = false;
+    }, 100);
   }
 
-  encode(op, payload) {
+  #encode(op, payload) {
     const str = JSON.stringify(payload);
-    const buf = Buffer.alloc(12 + str.length);
+    const buf = Buffer.alloc(8 + str.length);
     buf.writeUInt32LE(op, 0);
-    buf.writeUInt32LE(0, 4);
-    buf.writeUInt32LE(str.length, 8);
-    buf.write(str, 12, str.length, 'utf8');
+    buf.writeUInt32LE(str.length, 4);
+    buf.write(str, 8, str.length, 'utf8');
     return buf;
   }
 }
