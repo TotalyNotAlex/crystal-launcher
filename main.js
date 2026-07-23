@@ -162,13 +162,13 @@ app.whenReady().then(() => {
   setInterval(checkUpdate, 30000);
 });
 
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.exit(0); });
 
 ipcMain.handle('open-external', async (e, url) => { shell.openExternal(url); });
 
 ipcMain.on('window-minimize', () => mainWindow?.minimize());
 ipcMain.on('window-maximize', () => { if (mainWindow) mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize(); });
-ipcMain.on('window-close', () => mainWindow?.close());
+ipcMain.on('window-close', () => { app.exit(0); });
 ipcMain.on('window-expand', () => mainWindow?.setMinimumSize(850, 580));
 
 ipcMain.handle('check-java', async () => checkJava());
