@@ -1033,9 +1033,13 @@ window.api.onLaunchStatus((s) => { $('progress-text').textContent = s; });
 async function init() {
   try {
     loadingStatus.textContent = 'Fetching manifests...';
-    const [fetchedVersions, fetchedAccounts, fetchedProfiles, settings] = await Promise.all([
-      window.api.getVersions(), window.api.getAccounts(), window.api.getProfiles(), window.api.getSettings(),
+    const [fetchedVersions, fetchedAccounts, fetchedProfiles, settings, appVersion] = await Promise.all([
+      window.api.getVersions(), window.api.getAccounts(), window.api.getProfiles(), window.api.getSettings(), window.api.getAppVersion(),
     ]);
+    const vDisplay = $('app-version-display');
+    const vBadge = $('app-version-badge');
+    if (vDisplay) vDisplay.textContent = `v${appVersion}`;
+    if (vBadge) vBadge.textContent = `v${appVersion}`;
 
     versionsData = fetchedVersions;
     accounts = fetchedAccounts;

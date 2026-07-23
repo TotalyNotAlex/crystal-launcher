@@ -324,6 +324,7 @@ function getPlaytimeSessions() {
 }
 
 ipcMain.handle('check-updates', async () => updateService.checkForUpdates());
+ipcMain.handle('get-app-version', async () => { try { return require(path.join(__dirname, 'package.json')).version; } catch { return '1.0.3'; } });
 
 ipcMain.handle('get-crash-logs', async () => {
   const crashDir = path.join(baseDataDir, 'game', 'crash-reports');

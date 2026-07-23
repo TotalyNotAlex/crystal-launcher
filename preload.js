@@ -72,6 +72,7 @@ contextBridge.exposeInMainWorld('api', {
 
   getTranslations: (lang) => ipcRenderer.invoke('get-translations', lang),
   getLanguages: () => ipcRenderer.invoke('get-languages'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
   onAuthStatus: (cb) => ipcRenderer.on('auth-status', (e, d) => cb(d)),
   onLaunchProgress: (cb) => ipcRenderer.on('launch-progress', (e, d) => cb(d)),
