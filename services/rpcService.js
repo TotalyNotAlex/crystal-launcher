@@ -99,7 +99,6 @@ class RPCService {
     buf.write(str, 8, len, 'utf8');
     try { this.socket?.write(buf); } catch {}
   }
-}
 
   setLauncherActivity(view) {
     const labels = {
