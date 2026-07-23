@@ -1136,8 +1136,8 @@ window.api.onJavaInstallProgress((p) => {
 let seenUpdateBuilds = new Set();
 
 window.api.onUpdateAvailable((update) => {
-  if (seenUpdateBuilds.has(update.buildId)) return;
-  seenUpdateBuilds.add(update.buildId);
+  if (seenUpdateBuilds.has(update.version || update.buildId)) return;
+  seenUpdateBuilds.add(update.version || update.buildId);
   const container = $('toast-container');
   const el = document.createElement('div');
   el.className = 'toast';

@@ -13,9 +13,7 @@ class UpdateService {
     try {
       if (manifestPath && fs.existsSync(manifestPath)) {
         const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-        const isNewer = m.buildId && (!this._lastBuildId || m.buildId !== this._lastBuildId) && m.version && !(m.version === CURRENT_VERSION && m.buildId === this._lastBuildId);
-        if (m.version && (this.compareVersions(m.version, CURRENT_VERSION) > 0 || (m.buildId && m.buildId !== this._lastBuildId))) {
-          this._lastBuildId = m.buildId;
+        if (m.version && this.compareVersions(m.version, CURRENT_VERSION) > 0) {
           return {
             hasUpdate: true,
             version: m.version,
@@ -23,7 +21,7 @@ class UpdateService {
             url: '',
             downloadUrl: m.downloadUrl || '',
             body: m.body || '',
-            buildId: m.buildId,
+            buildId: m.buildId || 0,
           };
         }
       }
@@ -35,7 +33,6 @@ class UpdateService {
       });
       const tag = res.data.tag_name || res.data.name || '';
       const version = tag.replace(/^v/, '');
-      const isNewer = this.compareVersions(version, CURRENT_VERSION) > 0;
       return {
         hasUpdate: isNewer,
         version,
