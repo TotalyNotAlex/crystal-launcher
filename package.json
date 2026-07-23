@@ -1,0 +1,66 @@
+{
+  "name": "crystal-launcher",
+  "version": "1.0.2",
+  "description": "A sleek, modern Minecraft launcher with Microsoft auth, mod loader support, and profile management.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "keywords": [
+    "minecraft",
+    "launcher",
+    "fabric",
+    "forge",
+    "crystal"
+  ],
+  "author": "Crystal Launcher",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.8",
+    "discord-rpc": "^4.0.1",
+    "minecraft-launcher-core": "^3.9.0"
+  },
+  "devDependencies": {
+    "electron": "^29.4.6",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.crystalllauncher.app",
+    "productName": "Crystal Launcher",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*"
+    ],
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Crystal Launcher",
+      "artifactName": "Crystal Launcher Setup 1.0.2.exe",
+      "runAfterFinish": true,
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "installerHeaderIcon": "icon.ico",
+      "license": null,
+      "unicode": true
+    },
+    "portable": {
+      "artifactName": "Crystal Launcher Portable.exe"
+    }
+  },
+  "allowScripts": {
+    "electron@29.4.6": true
+  }
+}

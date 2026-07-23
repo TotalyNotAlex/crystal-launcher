@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crystal Launcher</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div id="app-shell">
+
+    <div class="titlebar" id="main-titlebar">
+      <div class="titlebar-brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <span>Crystal Launcher</span>
+      </div>
+      <div class="titlebar-controls">
+        <button class="title-btn minimize" id="btn-minimize"></button>
+        <button class="title-btn maximize" id="btn-maximize"></button>
+        <button class="title-btn close" id="btn-close"></button>
+      </div>
+    </div>
+
+    <div id="loading-overlay">
+      <div class="spinner-container">
+        <div class="crystal-ring"></div>
+        <div class="crystal-ring inner"></div>
+        <div class="crystal-core">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+      </div>
+      <div class="loading-title" data-i18n="app.name">Crystal Launcher</div>
+      <div class="loading-status" id="loading-status">Initializing...</div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <div id="main-app">
+      <div class="sidebar">
+        <div class="nav-section">
+          <div class="nav-item active" data-view="play">
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <span data-i18n="titlebar.play">Play</span>
+          </div>
+          <div class="nav-item" data-view="mods">
+            <svg viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
+            <span data-i18n="titlebar.mods">Mods</span>
+          </div>
+          <div class="nav-item" data-view="profiles">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+            <span data-i18n="titlebar.profiles">Profiles</span>
+          </div>
+          <div class="nav-item" data-view="accounts">
+            <svg viewBox="0 0 24 24"><path d="M12 12c1.93 0 3.5-1.57 3.5-3.5S13.93 5 12 5 8.5 6.57 8.5 8.5 10.07 12 12 12zm0 2c-2.33 0-7 1.17-7 3.5V18h14v-.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+            <span data-i18n="titlebar.accounts">Accounts</span>
+          </div>
+          <div class="nav-item" data-view="worlds">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+            <span data-i18n="titlebar.worlds">Worlds</span>
+          </div>
+          <div class="nav-item" data-view="servers">
+            <svg viewBox="0 0 24 24"><path d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H4v-2h7v2zm9 0h-7v-2h7v2z"/></svg>
+            <span data-i18n="titlebar.servers">Servers</span>
+          </div>
+          <div class="nav-item" data-view="console">
+            <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM8 20H4v-4h4v4zm0-6H4v-4h4v4zm0-6H4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4z"/></svg>
+            <span data-i18n="titlebar.console">Console</span>
+          </div>
+          <div class="nav-item" data-view="news">
+            <svg viewBox="0 0 24 24"><path d="M5 4h2v7H5zm0 9h2v2H5zm4-5h2v7H9zm0 9h2v2H9zm4-13h2v12h-2zm0 14h2v2h-2zm4-9h2v7h-2zm0 9h2v2h-2z"/></svg>
+            <span data-i18n="titlebar.news">News</span>
+          </div>
+          <div class="nav-item" data-view="settings">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94c0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32a.48.48 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+            <span data-i18n="titlebar.settings">Settings</span>
+          </div>
+        </div>
+        <div class="account-badge" id="sidebar-account-badge">
+          <div class="badge-avatar" id="sidebar-avatar">
+            <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          </div>
+          <div class="badge-info">
+            <div class="badge-name" id="sidebar-username">Offline Player</div>
+            <div class="badge-type" id="sidebar-account-type">Offline</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+
+        <!-- PLAY VIEW -->
+        <div class="view active" id="view-play">
+          <div class="hero">
+            <div class="hero-text">
+              <h2 data-i18n="play.ready">Ready to play?</h2>
+              <p data-i18n="play.subtitle">Choose your version and loader, then jump in.</p>
+            </div>
+            <div class="hero-icon" id="hero-loader-icon">
+              <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            </div>
+          </div>
+
+          <div class="selectors">
+            <div class="selector">
+              <label data-i18n="play.loader">Loader</label>
+              <div class="dropdown" id="dropdown-loader">
+                <button class="dropdown-trigger" id="trigger-loader">
+                  <span id="trigger-loader-text">Vanilla</span>
+                  <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+                </button>
+                <div class="dropdown-menu" id="menu-loader">
+                  <div class="dropdown-option selected" data-value="vanilla">Vanilla</div>
+                  <div class="dropdown-option" data-value="fabric">Fabric</div>
+                  <div class="dropdown-option" data-value="forge">Forge</div>
+                </div>
+              </div>
+            </div>
+            <div class="selector">
+              <label data-i18n="play.version">Version</label>
+              <div class="dropdown" id="dropdown-version">
+                <button class="dropdown-trigger" id="trigger-version">
+                  <span id="trigger-version-text">Loading...</span>
+                  <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+                </button>
+                <div class="dropdown-menu" id="menu-version">
+                  <div class="search-box">
+                    <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 14z"/></svg>
+                    <input type="text" id="search-version" class="search-input" data-i18n-placeholder="mods.search" placeholder="Search version..." autocomplete="off">
+                  </div>
+                  <div class="version-list" id="version-list"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="launch-panel">
+            <div class="summary">
+              <div class="summary-name" id="summary-name">Vanilla Minecraft</div>
+              <div class="summary-version" id="summary-version">1.20.4</div>
+            </div>
+            <button class="btn-play" id="btn-play" data-i18n="play.btn">Play</button>
+          </div>
+
+          <div class="progress" id="progress-container">
+            <div class="progress-text" id="progress-text">Preparing...</div>
+            <div class="progress-track">
+              <div class="progress-fill" id="progress-fill"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODS VIEW -->
+        <div class="view" id="view-mods">
+          <div class="mods-tabs">
+            <button class="mods-tab active" data-mods-tab="browse" data-i18n="mods.browse">Browse</button>
+            <button class="mods-tab" data-mods-tab="curseforge">CurseForge</button>
+            <button class="mods-tab" data-mods-tab="resourcepacks">Resourcepacks</button>
+            <button class="mods-tab" data-mods-tab="shaders">Shaders</button>
+            <button class="mods-tab" data-mods-tab="modpacks" data-i18n="mods.modpacks">Modpacks</button>
+            <button class="mods-tab" data-mods-tab="installed" data-i18n="mods.installed">Installed</button>
+          </div>
+
+          <!-- BROWSE TAB -->
+          <div class="mods-panel active" id="mods-browse">
+            <div class="mods-search-bar">
+              <input type="text" id="mods-search-input" class="mods-search-input" data-i18n-placeholder="mods.search" placeholder="Search mods on Modrinth..." autocomplete="off">
+              <button class="btn btn-primary" id="mods-search-btn" data-i18n="mods.search_btn">Search</button>
+            </div>
+            <div class="mods-results" id="mods-results">
+              <div class="mods-placeholder" data-i18n="mods.placeholder">Search for mods to get started</div>
+            </div>
+          </div>
+
+          <!-- CURSEFORGE TAB -->
+          <div class="mods-panel" id="mods-curseforge">
+            <div class="mods-search-bar">
+              <input type="text" id="cf-search-input" class="mods-search-input" data-i18n-placeholder="mods.search" placeholder="Search mods on CurseForge..." autocomplete="off">
+              <button class="btn btn-primary" id="cf-search-btn" data-i18n="mods.search_btn">Search</button>
+            </div>
+            <div class="mods-results" id="cf-results">
+              <div class="mods-placeholder" data-i18n="mods.placeholder">Search for mods on CurseForge</div>
+            </div>
+          </div>
+
+          <!-- RESOURCEPACKS TAB -->
+          <div class="mods-panel" id="mods-resourcepacks">
+            <div class="mods-search-bar">
+              <input type="text" id="rp-search-input" class="mods-search-input" placeholder="Search resourcepacks on Modrinth..." autocomplete="off">
+              <button class="btn btn-primary" id="rp-search-btn" data-i18n="mods.search_btn">Search</button>
+            </div>
+            <div class="mods-results" id="rp-results">
+              <div class="mods-placeholder">Search for resourcepacks</div>
+            </div>
+          </div>
+
+          <!-- SHADERS TAB -->
+          <div class="mods-panel" id="mods-shaders">
+            <div class="mods-search-bar">
+              <input type="text" id="shader-search-input" class="mods-search-input" placeholder="Search shaders on Modrinth..." autocomplete="off">
+              <button class="btn btn-primary" id="shader-search-btn" data-i18n="mods.search_btn">Search</button>
+            </div>
+            <div class="mods-results" id="shader-results">
+              <div class="mods-placeholder">Search for shaders</div>
+            </div>
+          </div>
+
+          <!-- MODPACKS TAB -->
+          <div class="mods-panel" id="mods-modpacks">
+            <div class="mods-search-bar">
+              <input type="text" id="modpacks-search-input" class="mods-search-input" data-i18n-placeholder="mods.search_modpacks" placeholder="Search modpacks on Modrinth..." autocomplete="off">
+              <button class="btn btn-primary" id="modpacks-search-btn" data-i18n="mods.search_btn">Search</button>
+            </div>
+            <div class="mods-results" id="modpacks-results">
+              <div class="mods-placeholder" data-i18n="mods.placeholder_modpacks">Search for modpacks</div>
+            </div>
+          </div>
+
+          <!-- INSTALLED TAB -->
+          <div class="mods-panel" id="mods-installed">
+            <div class="mods-installed-header">
+              <span data-i18n="mods.installed_for">Mods for current profile</span>
+              <button class="btn btn-secondary" id="mods-open-folder-btn" data-i18n="mods.open_folder">Open Folder</button>
+            </div>
+            <div class="mod-list" id="mods-installed-list">
+              <div class="mod-empty" data-i18n="mods.placeholder_installed">No mods installed yet.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PROFILES VIEW -->
+        <div class="view" id="view-profiles">
+          <div class="view-header">
+            <div>
+              <h1 class="page-title" data-i18n="profiles.title">Profiles</h1>
+              <p class="page-sub" data-i18n="profiles.subtitle">Isolated environments for mods and configs</p>
+            </div>
+            <button class="btn btn-primary" id="btn-create-profile" data-i18n="profiles.new">+ New</button>
+          </div>
+
+          <div class="profile-grid" id="profile-grid"></div>
+
+          <div class="mod-panel">
+            <div class="mod-header">
+              <h3><span data-i18n="profiles.mods">Mods</span> (<span id="mod-count">0</span>)</h3>
+              <button class="btn btn-secondary" id="btn-open-mods" data-i18n="profiles.open">Open Folder</button>
+            </div>
+            <div class="mod-list" id="mod-list">
+              <div class="mod-empty" data-i18n="profiles.no_mods">No mods yet. Drop .jar files into the mods folder.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACCOUNTS VIEW -->
+        <div class="view" id="view-accounts">
+          <div class="view-header">
+            <div>
+              <h1 class="page-title" data-i18n="accounts.title">Accounts</h1>
+              <p class="page-sub" data-i18n="accounts.subtitle">Manage Microsoft and offline accounts</p>
+            </div>
+            <div class="header-actions">
+              <button class="btn btn-secondary" id="btn-add-offline" data-i18n="accounts.offline_btn">Offline</button>
+              <button class="btn btn-primary" id="btn-add-microsoft" data-i18n="accounts.microsoft_btn">+ Microsoft</button>
+            </div>
+          </div>
+          <div class="account-list" id="account-list"></div>
+        </div>
+
+        <!-- WORLDS VIEW -->
+        <div class="view" id="view-worlds">
+          <div class="view-header">
+            <div>
+              <h1 class="page-title" data-i18n="worlds.title">Worlds</h1>
+              <p class="page-sub" data-i18n="worlds.subtitle">Manage your saved worlds</p>
+            </div>
+            <button class="btn btn-secondary" id="btn-open-saves" data-i18n="worlds.open_folder">Open Folder</button>
+          </div>
+          <div class="worlds-grid" id="worlds-grid">
+            <div class="mods-placeholder" data-i18n="worlds.no_worlds">No worlds found. Start Minecraft to create one.</div>
+          </div>
+        </div>
+
+        <!-- SERVERS VIEW -->
+        <div class="view" id="view-servers">
+          <div class="view-header">
+            <div>
+              <h1 class="page-title" data-i18n="servers.title">Servers</h1>
+              <p class="page-sub" data-i18n="servers.subtitle">Manage your favorite servers</p>
+            </div>
+            <button class="btn btn-primary" id="btn-add-server" data-i18n="servers.add">+ Add</button>
+          </div>
+          <div class="server-list" id="server-list">
+            <div class="mods-placeholder" data-i18n="servers.no_servers">No servers yet. Add a server to get started.</div>
+          </div>
+        </div>
+
+        <!-- CONSOLE VIEW -->
+        <div class="view" id="view-console">
+          <div class="view-header">
+            <div>
+              <h1 class="page-title" data-i18n="console.title">Console</h1>
+              <p class="page-sub" data-i18n="console.subtitle">Launch output and crash reports</p>
+            </div>
+            <div class="header-actions">
+              <button class="btn btn-secondary" id="btn-clear-console" style="font-size:11px;" data-i18n="console.clear">Clear</button>
+              <button class="btn btn-secondary" id="btn-console-tab-log" style="font-size:11px;background:var(--accent);color:#fff;">Log</button>
+              <button class="btn btn-secondary" id="btn-console-tab-crashes" style="font-size:11px;">Crash Reports</button>
+            </div>
+          </div>
+          <div class="console-output" id="console-output">
+            <div class="console-placeholder" data-i18n="console.placeholder">Launch output will appear here</div>
+          </div>
+          <div class="crash-list" id="crash-list" style="display:none;flex-direction:column;gap:8px;overflow-y:auto;flex:1;">
+            <div class="mods-placeholder" data-i18n="console.no_crashes">No crash reports found</div>
+          </div>
+        </div>
+
+        <!-- NEWS VIEW -->
+        <div class="view" id="view-news">
+          <div class="view-header">
+            <div>
+              <h1 class="page-title" data-i18n="news.title">News</h1>
+              <p class="page-sub" data-i18n="news.subtitle">Latest Minecraft news</p>
+            </div>
+            <button class="btn btn-secondary" id="btn-refresh-news" style="font-size:11px;" data-i18n="news.refresh">Refresh</button>
+          </div>
+          <div class="news-list" id="news-list">
+            <div class="mods-loading" data-i18n="news.loading">Loading news...</div>
+          </div>
+        </div>
+
+        <!-- SETTINGS VIEW -->
+        <div class="view" id="view-settings">
+          <div class="view-header">
+            <div>
+              <h1 class="page-title" data-i18n="settings.title">Settings</h1>
+              <p class="page-sub" data-i18n="settings.subtitle">Performance, paths, and preferences</p>
+            </div>
+          </div>
+
+          <div class="settings-content">
+            <div class="settings-group">
+              <h3 class="group-title" data-i18n="settings.java">Java Runtime</h3>
+              <div id="java-status" class="java-status">Checking...</div>
+              <button class="btn btn-secondary" id="java-install-btn" style="font-size:11px;padding:4px 12px;width:fit-content;">Install Java 17</button>
+            </div>
+
+            <div class="settings-group">
+              <h3 class="group-title" data-i18n="settings.memory">Memory</h3>
+              <div class="ram-group" id="ram-selector">
+                <button class="ram-btn" data-ram="2">2 GB</button>
+                <button class="ram-btn active" data-ram="4">4 GB</button>
+                <button class="ram-btn" data-ram="6">6 GB</button>
+                <button class="ram-btn" data-ram="8">8 GB</button>
+                <button class="ram-btn" data-ram="12">12 GB</button>
+                <button class="ram-btn" data-ram="16">16 GB</button>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <h3 class="group-title" data-i18n="settings.jvm">JVM Flags</h3>
+              <input type="text" id="input-jvm" class="jvm-input" placeholder="-Xmn1G -XX:+UseG1GC" spellcheck="false">
+            </div>
+
+            <div class="settings-group">
+              <h3 class="group-title" data-i18n="settings.folders">Folders</h3>
+              <div class="folder-grid">
+                <button class="folder-btn" id="btn-game-folder">
+                  <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>
+                  <div><div>Game</div><div>.crystall/game</div></div>
+                </button>
+                <button class="folder-btn" id="btn-versions-folder">
+                  <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                  <div><div>Versions</div><div>.crystall/game/versions</div></div>
+                </button>
+                <button class="folder-btn" id="btn-backups-folder">
+                  <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                  <div><div>Backups</div><div>.crystall/backups</div></div>
+                </button>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <h3 class="group-title" data-i18n="settings.options">Options</h3>
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-label" data-i18n="settings.keep_open">Keep launcher open</div>
+                  <div class="toggle-desc" data-i18n="settings.keep_open_desc">Stay open while Minecraft is running</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="toggle-keep" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="language-row">
+                <div>
+                  <div class="toggle-label" data-i18n="settings.language">Language</div>
+                  <div class="toggle-desc" data-i18n="settings.language_desc">Select display language</div>
+                </div>
+                <select id="language-select" class="language-select">
+                  <option value="en">English</option>
+                  <option value="de">Deutsch</option>
+                </select>
+              </div>
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-label" data-i18n="settings.discord_rpc">Discord Rich Presence</div>
+                  <div class="toggle-desc">Show Minecraft activity on Discord</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="toggle-rpc" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="accent-row">
+                <div>
+                  <div class="toggle-label" data-i18n="settings.accent">Accent Color</div>
+                  <div class="toggle-desc" data-i18n="settings.accent_desc">Customize the launcher look</div>
+                </div>
+                <div class="accent-picker" id="accent-picker">
+                  <button class="accent-swatch active" data-color="#6c8cff" style="background:#6c8cff;"></button>
+                  <button class="accent-swatch" data-color="#4ade80" style="background:#4ade80;"></button>
+                  <button class="accent-swatch" data-color="#ff5f56" style="background:#ff5f56;"></button>
+                  <button class="accent-swatch" data-color="#ffbd2e" style="background:#ffbd2e;"></button>
+                  <button class="accent-swatch" data-color="#c084fc" style="background:#c084fc;"></button>
+                  <button class="accent-swatch" data-color="#f472b6" style="background:#f472b6;"></button>
+                  <input type="color" id="accent-custom" class="accent-custom" value="#6c8cff">
+                </div>
+              </div>
+              <div class="playtime-stats" id="playtime-stats">
+                <div class="stat-row"><span class="stat-label" data-i18n="playtime.total">Total Playtime</span><span class="stat-value" id="stat-total">0h</span></div>
+                <div class="stat-row"><span class="stat-label" data-i18n="playtime.today">Today</span><span class="stat-value" id="stat-today">0h</span></div>
+                <div class="stat-row"><span class="stat-label" data-i18n="playtime.week">This Week</span><span class="stat-value" id="stat-week">0h</span></div>
+              </div>
+              <div class="version-info">
+                <span>Crystal Launcher v1.0.0</span>
+                <span class="badge">v1.0.0</span>
+              </div>
+              <button class="btn btn-secondary" id="btn-check-updates" style="font-size:11px;padding:4px 12px;width:fit-content;" data-i18n="settings.check_updates">Check for Updates</button>
+              <div id="update-status" style="font-size:11px;color:var(--text-dim);"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-create-profile">
+      <div class="modal">
+        <h3 data-i18n="profiles.new_title">New Profile</h3>
+        <input type="text" class="modal-input" id="input-profile-name" data-i18n-placeholder="profiles.name_placeholder" placeholder="Profile name...">
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="btn-cancel-profile" data-i18n="profiles.cancel">Cancel</button>
+          <button class="btn btn-primary" id="btn-save-profile" data-i18n="profiles.save">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-delete-profile">
+      <div class="modal">
+        <h3 style="color:#ff5f56;" data-i18n="profiles.delete_title">Delete Profile?</h3>
+        <p id="delete-profile-warning">Delete <strong id="delete-profile-name" style="color:#fff;"></strong>? This cannot be undone.</p>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="btn-delete-backup" style="background:#c9783a;" data-i18n="profiles.delete_backup">Backup & Delete</button>
+          <button class="btn btn-secondary" id="btn-delete-confirm" style="color:#ff5f56;" data-i18n="profiles.delete">Delete</button>
+          <button class="btn btn-secondary" id="btn-delete-cancel" data-i18n="profiles.cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-offline">
+      <div class="modal">
+        <h3 data-i18n="accounts.offline_title">Offline Account</h3>
+        <input type="text" class="modal-input" id="input-offline-name" data-i18n-placeholder="accounts.username_placeholder" placeholder="Username...">
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="btn-cancel-offline" data-i18n="profiles.cancel">Cancel</button>
+          <button class="btn btn-primary" id="btn-save-offline" data-i18n="accounts.add">Add</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-add-server">
+      <div class="modal">
+        <h3 data-i18n="servers.add_title">Add Server</h3>
+        <input type="text" class="modal-input" id="input-server-name" data-i18n-placeholder="servers.name_placeholder" placeholder="Server name...">
+        <input type="text" class="modal-input" id="input-server-address" placeholder="IP or address...">
+        <input type="number" class="modal-input" id="input-server-port" placeholder="Port (default: 25565)" value="25565">
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="btn-cancel-server" data-i18n="profiles.cancel">Cancel</button>
+          <button class="btn btn-primary" id="btn-save-server" data-i18n="servers.save">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-mod-detail">
+      <div class="modal modal-wide">
+        <div class="modal-mod-header" id="modal-mod-header">
+          <img id="modal-mod-icon" class="modal-mod-icon" src="" alt="">
+          <div>
+            <h3 id="modal-mod-title">Mod Name</h3>
+            <div class="modal-mod-author" id="modal-mod-author">by author</div>
+          </div>
+        </div>
+        <div class="modal-mod-desc" id="modal-mod-desc"></div>
+        <div class="modal-mod-versions" id="modal-mod-versions">
+          <select id="modal-version-select" class="modal-select"></select>
+          <button class="btn btn-primary" id="modal-install-btn">Install</button>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="modal-mod-close" data-i18n="profiles.cancel">Close</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
