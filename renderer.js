@@ -1133,37 +1133,58 @@ window.api.onJavaInstallProgress((p) => {
 });
 
 // Auto-update notification
-let seenUpdateBuilds = new Set();
+let seenUpdateVersions = new Set();
 
-window.api.onUpdateAvailable((update) => {
-  if (seenUpdateBuilds.has(update.version || update.buildId)) return;
-  seenUpdateBuilds.add(update.version || update.buildId);
-  const container = $('toast-container');
-  const el = document.createElement('div');
-  el.className = 'toast';
-  el.style.cursor = 'pointer';
-  el.innerHTML = `<div class="toast-icon"><svg viewBox="0 0 24 24"><path d="M5 4h2v7H5zm0 9h2v2H5zm4-5h2v7H9zm0 9h2v2H9zm4-13h2v12h-2zm0 14h2v2h-2zm4-9h2v7h-2zm0 9h2v2h-2z"/></svg></div><div><div class="toast-title">Update ${update.version} available!</div><div class="toast-msg" style="font-size:11px;">Click to download and install</div></div>`;
-  el.onclick = async () => {
-    el.style.opacity = '0.5';
-    el.querySelector('.toast-msg').textContent = 'Downloading...';
+function showUpdateDialog(update) {
+  if (seenUpdateVersions.has(update.version)) return;
+  seenUpdateVersions.add(update.version);
+  const overlay = document.createElement('div');
+  overlay.className = 'update-overlay';
+  overlay.innerHTML = `
+    <div class="update-dialog">
+      <div class="update-icon"><svg viewBox="0 0 24 24" width="48" height="48"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-2h2v2zm0-4H9V7h2v6z" fill="var(--accent)"/></svg></div>
+      <div class="update-title">Update ${update.version} available!</div>
+      <div class="update-msg">Current version: ${update.currentVersion || '1.0.2'}</div>
+      <div class="update-actions">
+        <button class="btn btn-secondary" id="btn-update-later">Later</button>
+        <button class="btn btn-primary" id="btn-update-now">Update & Restart</button>
+      </div>
+      <div class="update-progress" id="update-progress" style="display:none;">
+        <div class="update-progress-fill" id="update-progress-fill"></div>
+        <div class="update-progress-text" id="update-progress-text">Downloading...</div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#btn-update-later').onclick = () => overlay.remove();
+  overlay.querySelector('#btn-update-now').onclick = async () => {
+    const btn = overlay.querySelector('#btn-update-now');
+    const later = overlay.querySelector('#btn-update-later');
+    btn.disabled = true;
+    later.disabled = true;
+    btn.textContent = 'Downloading...';
+    overlay.querySelector('.update-progress').style.display = 'block';
     const result = await window.api.downloadUpdate(update.downloadUrl);
     if (result.success) {
-      el.querySelector('.toast-msg').textContent = 'Installing... Launcher will restart.';
+      overlay.querySelector('#update-progress-text').textContent = 'Installing... Launcher will restart.';
     } else {
-      el.querySelector('.toast-msg').textContent = 'Update failed: ' + (result.error || '');
+      btn.textContent = 'Update failed: ' + (result.error || '');
+      btn.disabled = false;
+      later.disabled = false;
     }
   };
-  container.appendChild(el);
-  setTimeout(() => {
-    el.classList.add('hide');
-    setTimeout(() => el.remove(), 300);
-  }, 7000);
-});
+}
 
-window.api.onUpdateProgress((p) => {
-  const el = document.querySelector('.toast:last-child .toast-msg');
-  if (el) el.textContent = p.status || `Downloading... ${p.percent}%`;
-});
+function updateUpdateProgress(p) {
+  const fill = document.getElementById('update-progress-fill');
+  const text = document.getElementById('update-progress-text');
+  if (fill) fill.style.width = (p.percent || 0) + '%';
+  if (text) text.textContent = p.status || `Downloading... ${p.percent}%`;
+}
+
+window.api.onUpdateAvailable(showUpdateDialog);
+window.api.onUpdateProgress(updateUpdateProgress);
 
 initSettings();
 init();

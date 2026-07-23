@@ -48,7 +48,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Crystal Launcher",
-      "artifactName": "Crystal Launcher Setup 1.0.2.exe",
+      "artifactName": "Crystal Launcher Setup 1.0.3.exe",
       "runAfterFinish": true,
       "installerIcon": "icon.ico",
       "uninstallerIcon": "icon.ico",
