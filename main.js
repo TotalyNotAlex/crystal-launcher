@@ -287,8 +287,10 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId }) => {
           rpcService.setActivity({
             details: `Playing Minecraft ${profile.mcVersion}`,
             state: 'with Crystal Launcher',
-            largeImageKey: 'crystal_logo',
-            largeImageText: 'Crystal Launcher',
+            largeImageKey: 'minecraft_logo',
+            largeImageText: 'Minecraft',
+            smallImageKey: 'crystal_logo',
+            smallImageText: 'Crystal Launcher',
             startTimestamp: Math.floor(sessionStart / 1000),
             instance: true,
           });
@@ -312,8 +314,10 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId }) => {
         rpcService.setActivity({
           details: `Launching Minecraft ${profile.mcVersion}`,
           state: 'with Crystal Launcher',
-          largeImageKey: 'crystal_logo',
-          largeImageText: 'Crystal Launcher',
+          largeImageKey: 'minecraft_logo',
+          largeImageText: 'Minecraft',
+          smallImageKey: 'crystal_logo',
+          smallImageText: 'Crystal Launcher',
           startTimestamp: Math.floor(sessionStart / 1000),
           instance: true,
         });
