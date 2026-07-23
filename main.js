@@ -281,7 +281,22 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId }) => {
     const result = await launchService.launchGame(profile, account,
       (p) => e.sender.send('launch-progress', p),
       (s) => e.sender.send('launch-status', s),
-      (l) => e.sender.send('launch-log', l)
+      (l) => e.sender.send('launch-log', l),
+      () => {
+        if (settings.discordRpc !== false) {
+          rpcService.setActivity({
+            details: `Running Minecraft ${profile.mcVersion}`,
+            state: profile.name,
+            largeImageKey: 'crystal_logo',
+            largeImageText: 'Crystal Launcher',
+            startTimestamp: Math.floor(sessionStart / 1000),
+          });
+        }
+      },
+      () => {
+        rpcService.clearActivity();
+        rpcService.disconnect();
+      }
     );
     if (result?.status === 'started') {
       const sessions = getPlaytimeSessions();
@@ -290,7 +305,7 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId }) => {
       if (settings.discordRpc !== false) {
         rpcService.connect();
         rpcService.setActivity({
-          details: `Playing Minecraft ${profile.mcVersion}`,
+          details: `Launching Minecraft ${profile.mcVersion}`,
           state: profile.name,
           largeImageKey: 'crystal_logo',
           largeImageText: 'Crystal Launcher',

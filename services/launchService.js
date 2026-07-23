@@ -144,7 +144,7 @@ class LaunchService {
     }
   }
 
-  async launchGame(profile, account, onProgress, onStatus, onLog) {
+  async launchGame(profile, account, onProgress, onStatus, onLog, onRunning, onExit) {
     return new Promise(async (resolve, reject) => {
       try {
         const javaPath = this.findJava();
@@ -236,16 +236,23 @@ class LaunchService {
           if (onStatus) onStatus(`Downloading ${e.type}: ${Math.round((e.current / e.total) * 100) || 0}%`);
         });
 
-        launcher.on('spawn', () => setTimeout(resolveStarted, 1000));
+        launcher.on('spawn', () => {
+          setTimeout(resolveStarted, 1000);
+          setTimeout(() => { if (onRunning) onRunning(); }, 30000);
+        });
 
         launcher.on('data', (e) => {
           const text = e.toString();
           if (onLog) onLog(text);
-          if (text.includes('Setting user:') || text.includes('LWJGL Version:') || text.includes('Backend library:')) resolveStarted();
+          if (text.includes('Setting user:') || text.includes('LWJGL Version:') || text.includes('Backend library:')) {
+            resolveStarted();
+            if (onRunning) onRunning();
+          }
         });
 
         launcher.on('close', (code) => {
           if (onStatus) onStatus(`Minecraft exited (${code})`);
+          if (onExit) onExit(code);
           if (!hasResolved && code !== 0) { hasResolved = true; reject(new Error(`Minecraft exited with code ${code}. Check game log for details.`)); }
         });
 
