@@ -46,6 +46,7 @@ contextBridge.exposeInMainWorld('api', {
   getNews: () => ipcRenderer.invoke('get-news'),
 
   toggleRpc: (enabled) => ipcRenderer.invoke('toggle-rpc', enabled),
+  rpcSetView: (view) => ipcRenderer.invoke('rpc-set-view', view),
 
   checkUpdates: () => ipcRenderer.invoke('check-updates'),
   downloadUpdate: (url) => ipcRenderer.invoke('download-update', url),

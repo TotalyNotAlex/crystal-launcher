@@ -75,6 +75,7 @@ document.querySelectorAll('.nav-item').forEach((item) => {
     if (item.dataset.view === 'servers') updateServers();
     if (item.dataset.view === 'console') { $('btn-console-tab-log').click(); }
     if (item.dataset.view === 'news') updateNews();
+    window.api.rpcSetView(item.dataset.view);
   };
 });
 
@@ -1086,6 +1087,7 @@ async function init() {
         loadingOverlay.classList.add('hidden');
         mainApp.classList.add('visible');
         mainTitlebar.classList.remove('hidden');
+        window.api.rpcSetView('play');
       }, 800);
     } else {
       loadingStatus.textContent = 'Java wird automatisch heruntergeladen...';

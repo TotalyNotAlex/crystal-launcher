@@ -285,17 +285,22 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId }) => {
       () => {
         if (settings.discordRpc !== false) {
           rpcService.setActivity({
-            details: `Running Minecraft ${profile.mcVersion}`,
-            state: profile.name,
+            details: `Playing Minecraft ${profile.mcVersion}`,
+            state: 'with Crystal Launcher',
             largeImageKey: 'crystal_logo',
             largeImageText: 'Crystal Launcher',
             startTimestamp: Math.floor(sessionStart / 1000),
+            instance: true,
           });
         }
       },
       () => {
         rpcService.clearActivity();
         rpcService.disconnect();
+        const settings2 = getSavedSettings();
+        if (settings2.discordRpc !== false) {
+          setTimeout(() => { rpcService.connect(); }, 500);
+        }
       }
     );
     if (result?.status === 'started') {
@@ -306,10 +311,11 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId }) => {
         rpcService.connect();
         rpcService.setActivity({
           details: `Launching Minecraft ${profile.mcVersion}`,
-          state: profile.name,
+          state: 'with Crystal Launcher',
           largeImageKey: 'crystal_logo',
           largeImageText: 'Crystal Launcher',
           startTimestamp: Math.floor(sessionStart / 1000),
+          instance: true,
         });
       }
     }
@@ -485,6 +491,13 @@ ipcMain.handle('toggle-rpc', async (e, enabled) => {
   if (enabled) { rpcService.connect(); }
   else { rpcService.disconnect(); }
   return enabled;
+});
+
+ipcMain.handle('rpc-set-view', async (e, view) => {
+  const settings = getSavedSettings();
+  if (settings.discordRpc === false) return;
+  rpcService.connect();
+  rpcService.setLauncherActivity(view || 'play');
 });
 
 ipcMain.handle('get-news', async () => {
