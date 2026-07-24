@@ -1,5 +1,7 @@
 let translations = {};
 let currentLang = 'en';
+let newsCache = null;
+let worldsCache = null;
 
 function t(key, params) {
   let text = translations[key];
@@ -58,6 +60,32 @@ const loadingOverlay = $('loading-overlay');
 const loadingStatus = $('loading-status');
 const mainApp = $('main-app');
 const mainTitlebar = $('main-titlebar');
+
+setTimeout(() => { loadingOverlay?.classList.add('hidden'); mainApp?.classList.add('visible'); }, 15000);
+
+window.api.onGlobalError?.((msg) => toast('Error', msg, 'error', 10000));
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal.active').forEach((m) => m.classList.remove('active'));
+  }
+  if (e.key === 'Enter') {
+    const activeModSearch = $('mods-search-input')?.value;
+    if (activeModSearch && document.activeElement === $('mods-search-input')) {
+      searchMods();
+    }
+  }
+});
+
+function showError(container, message, retryFn) {
+  if (!container) return;
+  container.innerHTML = `
+    <div class="error-state" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 20px;text-align:center;">
+      <svg width="40" height="40" viewBox="0 0 24 24" style="fill:var(--danger);opacity:0.6"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+      <span style="color:var(--text-dim);font-size:13px;">${message}</span>
+      ${retryFn ? `<button class="btn btn-secondary" onclick="(${retryFn.toString()})()">${t('retry') || 'Retry'}</button>` : ''}
+    </div>`;
+}
 
 $('btn-minimize').onclick = () => window.api.minimizeWindow();
 $('btn-maximize').onclick = () => window.api.maximizeWindow();
@@ -171,9 +199,20 @@ async function searchMods() {
   results.innerHTML = `<div class="mods-loading">${t('mods.searching')}</div>`;
 
   const facets = [['project_type:mod']];
-  if (currentLoader !== 'vanilla') facets.push([`categories:${currentLoader}`]);
+  const category = $('mods-filter-category').value;
+  if (category) facets.push([`categories:${category}`]);
+  if (currentLoader !== 'vanilla' && !category) facets.push([`categories:${currentLoader}`]);
 
-  const data = await window.api.modrinthSearch(query, facets, 0);
+  const sort = $('mods-filter-sort').value;
+
+  let data;
+  try {
+    data = await window.api.modrinthSearch(query, facets, 0);
+  } catch (e) {
+    console.error('Mod search error:', e);
+    showError(results, t('mods.search_error') || 'Search failed', () => searchMods());
+    return;
+  }
   results.innerHTML = '';
 
   if (!data.hits || !data.hits.length) {
@@ -214,7 +253,14 @@ async function searchModpacks() {
   results.innerHTML = `<div class="mods-loading">${t('mods.searching')}</div>`;
 
   const facets = [['project_type:modpack']];
-  const data = await window.api.modrinthSearch(query, facets, 0);
+  let data;
+  try {
+    data = await window.api.modrinthSearch(query, facets, 0);
+  } catch (e) {
+    console.error('Modpack search error:', e);
+    showError(results, t('mods.search_error') || 'Search failed', () => searchModpacks());
+    return;
+  }
   results.innerHTML = '';
 
   if (!data.hits || !data.hits.length) {
@@ -289,6 +335,19 @@ async function openModDetail(slug, title) {
   }
 }
 
+function showModProgress(pct) {
+  const bar = $('modal-download-progress');
+  const fill = $('modal-download-fill');
+  const text = $('modal-download-text');
+  if (!bar) return;
+  if (pct < 0) { bar.classList.remove('active'); return; }
+  bar.classList.add('active');
+  fill.style.width = pct + '%';
+  text.textContent = pct < 100 ? `Downloading... ${pct}%` : 'Installing...';
+}
+
+window.api.onModDownloadProgress((d) => showModProgress(d.percent));
+
 $('modal-install-btn').onclick = async () => {
   const select = $('modal-version-select');
   const opt = select.options[select.selectedIndex];
@@ -299,15 +358,18 @@ $('modal-install-btn').onclick = async () => {
   const pid = activeProfileId || profiles[0]?.id;
   if (!pid) { toast('Install Error', 'Create a profile first', 'error'); return; }
 
+  showModProgress(0);
   $('modal-install-btn').textContent = t('mods.installing');
   $('modal-install-btn').disabled = true;
 
   const result = await window.api.modrinthDownload(url, pid, filename);
   if (result.success) {
+    showModProgress(-1);
     toast(t('mods.installed_ok'), `${$('modal-mod-title').textContent} ${t('mods.installed_profile')}`);
     $('modal-mod-detail').classList.remove('active');
     refreshInstalledMods();
   } else {
+    showModProgress(-1);
     toast(t('mods.download_failed'), result.error || t('mods.download_failed'), 'error');
   }
   $('modal-install-btn').textContent = t('mods.install');
@@ -326,7 +388,14 @@ async function searchCurseforge() {
   const results = $('cf-results');
   results.innerHTML = `<div class="mods-loading">${t('mods.searching')}</div>`;
 
-  const data = await window.api.curseforgeSearch(query, 6, 0);
+  let data;
+  try {
+    data = await window.api.modrinthSearch(query, facets, 0, sort);
+  } catch (e) {
+    console.error('CurseForge search error:', e);
+    showError(results, t('mods.search_error') || 'Search failed', () => searchCurseforge());
+    return;
+  }
   results.innerHTML = '';
 
   if (!data || !data.length) {
@@ -586,8 +655,14 @@ function updateProfiles() {
   profiles.forEach((p) => {
     const card = document.createElement('div');
     card.className = `profile-card ${p.id === activeProfileId ? 'selected' : ''}`;
-    card.innerHTML = `<div><div class="card-name">${p.name}</div><div class="card-meta">MC ${p.mcVersion} &bull; ${p.ram || currentRam}GB</div></div><div class="card-bottom"><span class="loader-tag">${p.loaderType}</span><button class="btn btn-secondary" style="padding:3px 8px;font-size:10px;">Delete</button></div>`;
-    card.querySelector('button').onclick = (e) => { e.stopPropagation(); targetDeleteProfileId = p.id; $('delete-profile-warning').innerHTML = t('profiles.delete_warn', { name: `<strong style="color:#fff;">${p.name}</strong>` }); $('modal-delete-profile').classList.add('active'); };
+    card.innerHTML = `<div><div class="card-name">${p.name}</div><div class="card-meta">MC ${p.mcVersion} &bull; ${p.ram || currentRam}GB</div></div><div class="card-bottom"><span class="loader-tag">${p.loaderType}</span><div class="card-actions"><button class="btn btn-secondary card-backup-btn" style="padding:3px 8px;font-size:10px;" title="Backup">${t('profiles.backup') || 'Backup'}</button><button class="btn btn-secondary" style="padding:3px 8px;font-size:10px;color:var(--danger);">${t('profiles.delete')}</button></div></div>`;
+    card.querySelector('.card-backup-btn').onclick = async (e) => {
+      e.stopPropagation();
+      const result = await window.api.backupProfile(p.id);
+      if (result.success) toast(t('profiles.backed_up') || 'Backup created', result.path);
+      else toast('Backup failed', result.error || 'Error', 'error');
+    };
+    card.querySelector('button:last-child').onclick = (e) => { e.stopPropagation(); targetDeleteProfileId = p.id; $('delete-profile-warning').innerHTML = t('profiles.delete_warn', { name: `<strong style="color:#fff;">${p.name}</strong>` }); $('modal-delete-profile').classList.add('active'); };
     card.onclick = () => {
       activeProfileId = p.id;
       if (p.loaderType) setLoader(p.loaderType);
@@ -599,20 +674,48 @@ function updateProfiles() {
   if (activeProfileId) loadMods(activeProfileId);
 }
 
+function setupDragDrop(container, acceptExts, onDrop) {
+  container.addEventListener('dragover', (e) => { e.preventDefault(); container.classList.add('drag-over'); });
+  container.addEventListener('dragleave', () => container.classList.remove('drag-over'));
+  container.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    container.classList.remove('drag-over');
+    container.innerHTML = `<div class="mods-loading">Copying files...</div>`;
+    for (const file of e.dataTransfer.files) {
+      const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+      if (acceptExts.includes(ext)) {
+        await onDrop(file.path, file.name);
+      }
+    }
+  });
+}
+
 async function loadMods(pid) {
   try {
     const mods = await window.api.getMods(pid);
     $('mod-count').textContent = mods.length;
     const list = $('mod-list');
     list.innerHTML = '';
-    if (!mods.length) { list.innerHTML = `<div class="mod-empty">${t('profiles.no_mods')}</div>`; return; }
+    if (!mods.length) {
+      list.innerHTML = `<div class="mod-empty drag-target">${t('profiles.no_mods')} — Drop .jar files here</div>`;
+    }
     mods.forEach((m) => {
       const el = document.createElement('div');
       el.className = 'mod-item';
-      el.innerHTML = `<span class="mod-name">${m.name}</span><label class="toggle"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span class="toggle-slider"></span></label>`;
+      el.innerHTML = `<span class="mod-name">${m.name}</span><span class="mod-size" style="color:var(--text-muted);font-size:10px;margin-right:auto;margin-left:8px;">${(m.size / 1024).toFixed(0)} KB</span><label class="toggle"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span class="toggle-slider"></span></label>`;
       el.querySelector('input').onchange = async function () { await window.api.toggleMod(pid, m.fileName, this.checked); loadMods(pid); };
       list.appendChild(el);
     });
+    if (!list._dragSetup) {
+      setupDragDrop(list, ['.jar', '.zip', '.mrpack'], async (filePath, fileName) => {
+        if (pid) {
+          const result = await window.api.copyToMods(pid, filePath, fileName);
+          if (result.success) { toast('Installed', fileName); loadMods(pid); }
+          else toast('Error', result.error, 'error');
+        }
+      });
+      list._dragSetup = true;
+    }
   } catch (e) { console.error(e); }
 }
 
@@ -688,8 +791,12 @@ $('btn-save-offline').onclick = async () => {
 // Worlds
 $('btn-open-saves').onclick = () => window.api.openSavesFolder();
 
-async function updateWorlds() {
+async function updateWorlds(force) {
   const grid = $('worlds-grid');
+  if (worldsCache && !force) {
+    grid.innerHTML = worldsCache;
+    return;
+  }
   try {
     const worlds = await window.api.listWorlds();
     grid.innerHTML = '';
@@ -718,22 +825,31 @@ async function updateWorlds() {
       card.querySelector('.world-delete-btn').onclick = (e) => {
         e.stopPropagation();
         if (confirm(`${t('worlds.delete_confirm')} "${w.name}"?`)) {
-          window.api.deleteWorld(w.id).then(() => updateWorlds());
+          window.api.deleteWorld(w.id).then(() => updateWorlds(true));
         }
       };
       grid.appendChild(card);
     });
-  } catch (e) { console.error('Worlds error:', e); }
+    worldsCache = grid.innerHTML;
+  } catch (e) {
+    console.error('Worlds error:', e);
+    showError(grid, t('worlds.load_error') || 'Failed to load worlds', () => updateWorlds(true));
+  }
 }
 
 // News
-async function updateNews() {
+async function updateNews(force) {
   const list = $('news-list');
   if (!list) return;
+  if (newsCache && !force) {
+    list.innerHTML = newsCache;
+    return;
+  }
   list.innerHTML = `<div class="mods-loading">${t('news.loading')}</div>`;
   try {
     const newsBase = 'https://launchercontent.mojang.com';
     const res = await fetch(`${newsBase}/v2/javaPatchNotes.json`, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     const entries = (json.entries || []).slice(0, 15);
     list.innerHTML = '';
@@ -763,15 +879,16 @@ async function updateNews() {
       `;
       list.appendChild(card);
     });
+    newsCache = list.innerHTML;
   } catch (e) {
     console.error('News error:', e);
-    list.innerHTML = `<div class="mods-placeholder">${t('news.error')}</div>`;
+    showError(list, t('news.error') || 'Failed to load news', () => updateNews(true));
   }
 }
 
-$('btn-refresh-news').onclick = updateNews;
+$('btn-refresh-news').onclick = () => { newsCache = null; updateNews(true); };
 
-// Add news refresh to nav click
+
 // Servers
 let editingServerId = null;
 
@@ -835,7 +952,10 @@ async function updateServers() {
       };
       list.appendChild(card);
     });
-  } catch (e) { console.error('Servers error:', e); }
+  } catch (e) {
+    console.error('Servers error:', e);
+    showError(list, t('servers.load_error') || 'Failed to load servers', () => updateServers());
+  }
 }
 
 async function connectToServer(server) {

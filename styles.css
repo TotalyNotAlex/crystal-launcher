@@ -509,6 +509,7 @@ html, body {
 .card-name { color: var(--text); font-weight: 600; font-size: 14px; }
 .card-meta { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
 .card-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.card-actions { display: flex; gap: 4px; }
 .loader-tag { background: var(--accent-dim); color: var(--accent); padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
 
 .mod-panel {
@@ -534,6 +535,8 @@ html, body {
   font-size: 12px;
   padding: 6px 0;
 }
+.drag-target { border: 2px dashed var(--text-muted); border-radius: var(--radius-sm); padding: 30px 20px !important; margin: 8px 0; text-align: center; }
+#mod-list.drag-over, #mods-installed-list.drag-over { border-color: var(--accent) !important; background: var(--accent-glow) !important; border-radius: var(--radius-sm); }
 
 .mod-item {
   background: var(--bg-elevated);
@@ -820,6 +823,22 @@ html, body {
 
 .mods-search-input:focus { border-color: var(--accent); }
 .mods-search-input::placeholder { color: var(--text-muted); }
+
+.mods-filter-bar { display: flex; gap: 6px; }
+.mods-filter-select {
+  flex: 1;
+  background: var(--bg-surface);
+  color: var(--text-dim);
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+}
+.mods-filter-select:focus { border-color: var(--accent); }
+.mods-filter-select option { background: var(--bg-elevated); color: var(--text); }
 
 .mods-results {
   flex: 1;

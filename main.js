@@ -3,6 +3,16 @@ const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
 
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  try {
+    if (mainWindow) mainWindow.webContents.send('global-error', err.message);
+  } catch {}
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+});
+
 const authService = require('./services/authService');
 const versionService = require('./services/versionService');
 const profileService = require('./services/profileService');
@@ -361,8 +371,9 @@ ipcMain.handle('get-playtime', async () => {
   return { totalMs, todayMs, weekMs, sessions: sessions.slice(-50).reverse() };
 });
 
-ipcMain.handle('modrinth-search', async (e, { query, facets, offset }) => {
-  return await modrinthService.searchProjects(query, facets || [], offset || 0);
+ipcMain.handle('modrinth-search', async (e, { query, facets, offset, index }) => {
+  try { return await modrinthService.searchProjects(query, facets, offset, 30, index || 'relevance'); }
+  catch (err) { return { hits: [] }; }
 });
 
 ipcMain.handle('modrinth-project', async (e, slug) => {
@@ -377,7 +388,9 @@ ipcMain.handle('modrinth-download', async (e, { url, profileId, fileName }) => {
   try {
     const modsDir = profileService.getModsFolder(profileId);
     const dest = path.join(modsDir, fileName);
-    const ok = await modrinthService.downloadFile(url, dest);
+    const ok = await modrinthService.downloadFile(url, dest, (pct) => {
+      e.sender.send('mod-download-progress', { percent: pct, fileName });
+    });
     return { success: ok, path: dest };
   } catch (err) { return { success: false, error: err.message }; }
 });
@@ -488,6 +501,52 @@ ipcMain.handle('download-update', async (e, downloadUrl) => {
     spawn(dest, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore' }).unref();
     setTimeout(() => app.exit(0), 2000);
     return { success: true };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+ipcMain.handle('backup-profile', async (e, { profileId }) => {
+  try {
+    const profiles = profileService.getProfiles();
+    const profile = profiles.find((p) => p.id === profileId);
+    if (!profile) return { success: false, error: 'Profile not found' };
+    const modsDir = profileService.getModsFolder(profileId);
+    const backupDir = path.join(baseDataDir, 'backups');
+    if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+    const safeName = profile.name.replace(/[^a-z0-9]/gi, '_');
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const zipName = `${safeName}_${timestamp}.zip`;
+    const zipPath = path.join(backupDir, zipName);
+    const psCmd = `Compress-Archive -Path '${modsDir}\\*' -DestinationPath '${zipPath}' -Force`;
+    execSync(`powershell -NoProfile -Command "${psCmd.replace(/"/g, '\\"')}"`, { timeout: 30000 });
+    if (!fs.existsSync(zipPath)) {
+      fs.writeFileSync(path.join(backupDir, `${safeName}_${timestamp}.json`), JSON.stringify(profile, null, 2));
+      fs.writeFileSync(path.join(backupDir, `${safeName}_${timestamp}.md`), 'Profile: ' + profile.name + '\nMods dir: ' + modsDir);
+      return { success: true, path: path.join(backupDir, `${safeName}_${timestamp}.json`), note: 'Mods folder saved as JSON metadata (Compress-Archive unavailable)' };
+    }
+    return { success: true, path: zipPath };
+  } catch (err) {
+    try {
+      const profiles = profileService.getProfiles();
+      const profile = profiles.find((p) => p.id === profileId);
+      const modsDir = profileService.getModsFolder(profileId);
+      const backupDir = path.join(baseDataDir, 'backups');
+      if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+      const safeName = profile.name.replace(/[^a-z0-9]/gi, '_');
+      const timestamp = new Date().toISOString().slice(0, 10);
+      fs.writeFileSync(path.join(backupDir, `${safeName}_${timestamp}.json`), JSON.stringify(profile, null, 2));
+      const metaPath = path.join(backupDir, `${safeName}_${timestamp}.txt`);
+      fs.writeFileSync(metaPath, `Profile: ${profile.name}\nMods: ${modsDir}\nError: ${err.message}\nCopy mods manually from above path.`);
+      return { success: true, path: metaPath, note: 'Metadata saved (zip failed: ' + err.message + ')' };
+    } catch (e2) { return { success: false, error: e2.message }; }
+  }
+});
+
+ipcMain.handle('copy-to-mods', async (e, { profileId, sourcePath, fileName }) => {
+  try {
+    const modsDir = profileService.getModsFolder(profileId);
+    const dest = path.join(modsDir, fileName);
+    fs.copyFileSync(sourcePath, dest);
+    return { success: true, path: dest };
   } catch (err) { return { success: false, error: err.message }; }
 });
 

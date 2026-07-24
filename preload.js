@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('api', {
 
   launchGame: (pid, aid) => ipcRenderer.invoke('launch-game', { profileId: pid, accountId: aid }),
 
-  modrinthSearch: (q, facets, offset) => ipcRenderer.invoke('modrinth-search', { query: q, facets, offset }),
+  modrinthSearch: (q, facets, offset, index) => ipcRenderer.invoke('modrinth-search', { query: q, facets, offset, index }),
   modrinthProject: (slug) => ipcRenderer.invoke('modrinth-project', slug),
   modrinthVersions: (pid, loaders, gv) => ipcRenderer.invoke('modrinth-versions', { projectId: pid, loaders, gameVersions: gv }),
   modrinthDownload: (url, profileId, fileName) => ipcRenderer.invoke('modrinth-download', { url, profileId, fileName }),
@@ -70,6 +70,8 @@ contextBridge.exposeInMainWorld('api', {
   curseforgeSearch: (query, classId, offset) => ipcRenderer.invoke('curseforge-search', { query, classId, offset }),
   curseforgeVersions: (slug) => ipcRenderer.invoke('curseforge-versions', slug),
   curseforgeDownload: (fileId, fileName, profileId) => ipcRenderer.invoke('curseforge-download', { fileId, fileName, profileId }),
+  copyToMods: (profileId, sourcePath, fileName) => ipcRenderer.invoke('copy-to-mods', { profileId, sourcePath, fileName }),
+  backupProfile: (profileId) => ipcRenderer.invoke('backup-profile', { profileId }),
 
   getTranslations: (lang) => ipcRenderer.invoke('get-translations', lang),
   getLanguages: () => ipcRenderer.invoke('get-languages'),
@@ -79,4 +81,6 @@ contextBridge.exposeInMainWorld('api', {
   onLaunchProgress: (cb) => ipcRenderer.on('launch-progress', (e, d) => cb(d)),
   onLaunchStatus: (cb) => ipcRenderer.on('launch-status', (e, d) => cb(d)),
   onLaunchLog: (cb) => ipcRenderer.on('launch-log', (e, d) => cb(d)),
+  onGlobalError: (cb) => ipcRenderer.on('global-error', (e, d) => cb(d)),
+  onModDownloadProgress: (cb) => ipcRenderer.on('mod-download-progress', (e, d) => cb(d)),
 });

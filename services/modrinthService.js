@@ -3,9 +3,9 @@ const axios = require('axios');
 const API_BASE = 'https://api.modrinth.com/v2';
 
 class ModrinthService {
-  async searchProjects(query, facets = [], offset = 0, limit = 30) {
+  async searchProjects(query, facets = [], offset = 0, limit = 30, index = 'relevance') {
     try {
-      const params = { query, offset, limit };
+      const params = { query, offset, limit, index };
       if (facets.length) params.facets = JSON.stringify(facets);
       const res = await axios.get(`${API_BASE}/search`, { params, timeout: 10000 });
       return res.data;
@@ -52,10 +52,22 @@ class ModrinthService {
     }
   }
 
-  async downloadFile(url, destPath) {
+  async downloadFile(url, destPath, onProgress) {
     try {
-      const res = await axios.get(url, { responseType: 'arraybuffer', timeout: 60000 });
-      require('fs').writeFileSync(destPath, res.data);
+      const fs = require('fs');
+      const writer = fs.createWriteStream(destPath);
+      const res = await axios.get(url, { responseType: 'stream', timeout: 60000, maxRedirects: 5 });
+      const total = parseInt(res.headers['content-length'] || '0');
+      let downloaded = 0;
+      res.data.on('data', (chunk) => {
+        downloaded += chunk.length;
+        if (onProgress && total) onProgress(Math.round((downloaded / total) * 100));
+      });
+      await new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+        res.data.pipe(writer);
+      });
       return true;
     } catch (err) {
       console.error('Download error:', err.message);

@@ -169,6 +169,26 @@
               <input type="text" id="mods-search-input" class="mods-search-input" data-i18n-placeholder="mods.search" placeholder="Search mods on Modrinth..." autocomplete="off">
               <button class="btn btn-primary" id="mods-search-btn" data-i18n="mods.search_btn">Search</button>
             </div>
+            <div class="mods-filter-bar">
+              <select id="mods-filter-category" class="mods-filter-select">
+                <option value="">Category</option>
+                <option value="fabric">Fabric</option>
+                <option value="forge">Forge</option>
+                <option value="quilt">Quilt</option>
+                <option value="neoforge">NeoForge</option>
+                <option value="utility">Tools</option>
+                <option value="optimization">Optimization</option>
+                <option value="adventure">Adventure</option>
+                <option value="magic">Magic</option>
+                <option value="tech">Tech</option>
+              </select>
+              <select id="mods-filter-sort" class="mods-filter-select">
+                <option value="relevance">Sort: Relevance</option>
+                <option value="downloads">Sort: Downloads</option>
+                <option value="updated">Sort: Last Updated</option>
+                <option value="newest">Sort: Newest</option>
+              </select>
+            </div>
             <div class="mods-results" id="mods-results">
               <div class="mods-placeholder" data-i18n="mods.placeholder">Search for mods to get started</div>
             </div>
@@ -507,6 +527,12 @@
         <div class="modal-mod-versions" id="modal-mod-versions">
           <select id="modal-version-select" class="modal-select"></select>
           <button class="btn btn-primary" id="modal-install-btn">Install</button>
+        </div>
+        <div class="progress" id="modal-download-progress">
+          <div class="progress-text" id="modal-download-text">Downloading...</div>
+          <div class="progress-track">
+            <div class="progress-fill" id="modal-download-fill"></div>
+          </div>
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary" id="modal-mod-close" data-i18n="profiles.cancel">Close</button>
