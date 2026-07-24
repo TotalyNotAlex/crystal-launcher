@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const CURRENT_VERSION = '1.0.4';
+const CURRENT_VERSION = '1.0.5';
 let manifestPath = '';
 
 class UpdateService {
@@ -34,7 +34,7 @@ class UpdateService {
       const tag = res.data.tag_name || res.data.name || '';
       const version = tag.replace(/^v/, '');
       return {
-        hasUpdate: isNewer,
+        hasUpdate: this.compareVersions(version, CURRENT_VERSION) > 0,
         version,
         currentVersion: CURRENT_VERSION,
         url: res.data.html_url,

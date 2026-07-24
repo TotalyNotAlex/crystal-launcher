@@ -1,6 +1,6 @@
 {
   "name": "crystal-launcher",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "A sleek, modern Minecraft launcher with Microsoft auth, mod loader support, and profile management.",
   "main": "main.js",
   "scripts": {
@@ -48,7 +48,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Crystal Launcher",
-      "artifactName": "Crystal Launcher Setup 1.0.4.exe",
+      "artifactName": "Crystal Launcher Setup ${version}.exe",
       "runAfterFinish": true,
       "installerIcon": "icon.ico",
       "uninstallerIcon": "icon.ico",

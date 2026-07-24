@@ -749,7 +749,7 @@ async function updateNews() {
       const date = e.date ? new Date(e.date).toLocaleDateString() : '';
       const version = e.version || '';
       const imgUrl = e.image?.url ? `${newsBase}${e.image.url}` : (typeof e.image === 'string' ? `${newsBase}${e.image}` : '');
-      const linkUrl = e.contentPath ? `${newsBase}${e.contentPath}` : '';
+      const linkUrl = e.contentPath ? `${newsBase}/${e.contentPath.replace(/^\//, '')}` : '';
       const versionTag = version ? `<span class="news-version">${version}</span>` : '';
       const imgHtml = imgUrl
         ? `<img class="news-image" src="${imgUrl}" alt="" onerror="this.style.display='none'">`
