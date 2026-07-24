@@ -1,6 +1,6 @@
 {
   "name": "crystal-launcher",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "A sleek, modern Minecraft launcher with Microsoft auth, mod loader support, and profile management.",
   "main": "main.js",
   "scripts": {

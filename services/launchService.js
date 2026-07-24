@@ -15,6 +15,11 @@ class LaunchService {
   findJava() {
     const { execSync } = require('child_process');
 
+    const JavaService = require('./javaService');
+    const javaSvc = new JavaService(app.getPath('userData'));
+    const installed = javaSvc.getInstalledPath();
+    if (installed) return installed;
+
     const localJava = path.join(app.getPath('userData'), '.crystall', 'java');
     if (fs.existsSync(localJava)) {
       try {

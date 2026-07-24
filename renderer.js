@@ -1206,9 +1206,14 @@ async function init() {
         window.api.rpcSetView('play');
       }, 800);
     } else {
-      loadingStatus.textContent = 'Java wird automatisch heruntergeladen...';
-      $('java-status').innerHTML = `<span style="color:var(--accent)">&#9679;</span> Downloading Java 17... <span id="java-dl-pct">0%</span>`;
+      loadingStatus.textContent = 'Downloading Java 17...';
+      $('loading-detail').textContent = 'This may take a moment';
+      const javaProgress = document.createElement('div');
+      javaProgress.className = 'loading-java-progress';
+      javaProgress.innerHTML = `<div class="progress-text" style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:8px;">0%</div><div class="progress-track" style="width:200px;margin:4px auto 0;"><div class="progress-fill" id="loading-java-fill" style="width:0%"></div></div>`;
+      loadingStatus.after(javaProgress);
       const result = await window.api.installJava();
+      javaProgress.remove();
       if (result.success) {
         $('java-status').innerHTML = `<span style="color:var(--success)">&#9679;</span> ${t('settings.java_found', { version: '17' })} (auto-installed)`;
         loadingStatus.textContent = 'Ready!';
@@ -1220,8 +1225,9 @@ async function init() {
           mainTitlebar.classList.remove('hidden');
         }, 800);
       } else {
-        $('java-status').innerHTML = `<span style="color:var(--danger)">&#9679;</span> Java download failed: ${result.error} — <a href="https://adoptium.net" target="_blank" style="color:var(--accent)">${t('settings.java_download')}</a>`;
-        loadingStatus.textContent = 'Starting offline...';
+        $('java-status').innerHTML = `<span style="color:var(--danger)">&#9679;</span> Java download failed: ${result.error} <button class="btn btn-secondary" id="loading-java-retry" style="font-size:10px;padding:2px 8px;margin-left:6px;">Retry</button>`;
+        loadingStatus.textContent = 'Java installation failed';
+        document.getElementById('loading-java-retry').onclick = () => { location.reload(); };
         setTimeout(() => {
           window.api.expandWindow();
           $('app-shell').classList.add('expanded');
@@ -1252,6 +1258,10 @@ window.api.onJavaInstallProgress((p) => {
     status.innerHTML = `<span style="color:var(--accent)">&#9679;</span> ${p.status}`;
   }
   loadingStatus.textContent = p.status || 'Installing Java...';
+  const fill = $('loading-java-fill');
+  if (fill) fill.style.width = `${p.percent}%`;
+  const detail = $('loading-detail');
+  if (detail && p.status) detail.textContent = p.status;
 });
 
 // Auto-update notification

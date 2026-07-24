@@ -221,6 +221,14 @@ html, body {
   font-weight: 500;
 }
 
+.loading-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.loading-java-progress { margin-top: 8px; }
+
 #main-app {
   flex: 1;
   display: flex;
