@@ -486,7 +486,7 @@ ipcMain.handle('download-update', async (e, downloadUrl) => {
     e.sender.send('update-progress', { percent: 100, status: 'Download complete' });
     const { spawn } = require('child_process');
     spawn(dest, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore' }).unref();
-    app.exit(0);
+    setTimeout(() => app.exit(0), 2000);
     return { success: true };
   } catch (err) { return { success: false, error: err.message }; }
 });
