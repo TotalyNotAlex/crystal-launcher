@@ -25,6 +25,7 @@ const updateService = require('./services/updateService');
 const rpcService = require('./services/rpcService');
 
 let mainWindow = null;
+const isUpdateRestart = process.argv.includes('--updated');
 const baseDataDir = path.join(app.getPath('userData'), '.crystall');
 const accountsFile = path.join(baseDataDir, 'accounts.json');
 const settingsFile = path.join(baseDataDir, 'settings.json');
@@ -160,10 +161,16 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  const updatedFile = path.join(baseDataDir, '.updated');
+  if (fs.existsSync(updatedFile)) {
+    try { fs.unlinkSync(updatedFile); } catch {}
+  }
+
   async function checkUpdate() {
     try {
+      if (fs.existsSync(updatedFile)) return;
       const update = await updateService.checkForUpdates();
-      if (update.hasUpdate && mainWindow) {
+      if (update.hasUpdate && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-available', update);
       }
     } catch {}
@@ -172,13 +179,17 @@ app.whenReady().then(() => {
   setInterval(checkUpdate, 300000);
 });
 
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.exit(0); });
+app.on('before-quit', () => {
+  if (mainWindow) mainWindow.destroy();
+});
+
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
 ipcMain.handle('open-external', async (e, url) => { shell.openExternal(url); });
 
 ipcMain.on('window-minimize', () => mainWindow?.minimize());
 ipcMain.on('window-maximize', () => { if (mainWindow) mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize(); });
-ipcMain.on('window-close', () => { app.exit(0); });
+ipcMain.on('window-close', () => { app.quit(); });
 ipcMain.on('window-expand', () => mainWindow?.setMinimumSize(850, 580));
 
 ipcMain.handle('check-java', async () => checkJava());
@@ -498,8 +509,9 @@ ipcMain.handle('download-update', async (e, downloadUrl) => {
     });
     e.sender.send('update-progress', { percent: 100, status: 'Download complete' });
     const { spawn } = require('child_process');
+    fs.writeFileSync(path.join(baseDataDir, '.updated'), '1');
     spawn(dest, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore' }).unref();
-    setTimeout(() => app.exit(0), 2000);
+    setTimeout(() => { mainWindow?.destroy(); app.quit(); }, 4000);
     return { success: true };
   } catch (err) { return { success: false, error: err.message }; }
 });
