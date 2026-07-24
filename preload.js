@@ -88,6 +88,7 @@ contextBridge.exposeInMainWorld('api', {
   saveSkinFile: (name, base64Data) => ipcRenderer.invoke('save-skin-file', { name, base64Data }),
   deleteSkin: (name) => ipcRenderer.invoke('delete-skin', name),
   applyMicrosoftSkin: (skinPath, variant) => ipcRenderer.invoke('apply-microsoft-skin', { skinPath, variant }),
+  fetchNameMCSkin: (username) => ipcRenderer.invoke('fetch-namemc-skin', username),
   checkModUpdates: (profileId) => ipcRenderer.invoke('check-mod-updates', profileId),
   downloadMcVersion: (version, loaderType) => ipcRenderer.invoke('download-mc-version', { version, loaderType }),
   onMcDownloadProgress: (cb) => ipcRenderer.on('mc-download-progress', (e, d) => cb(d)),

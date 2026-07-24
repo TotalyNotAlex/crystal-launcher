@@ -1476,53 +1476,222 @@ async function init() {
 // Skin Changer
 let currentSkins = [];
 let activeSkinName = 'default';
+let skinModelType = 'slim';
+let skinPreviewImg = null;
 
-function loadSkinPreview(name, data) {
-  const canvas = $('skin-preview-canvas');
-  if (!canvas) return;
+function renderCharacterOnCanvas(canvas, img, modelType) {
+  if (!canvas || !img) return;
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, 120, 120);
-  if (!data && name === 'default') {
-    ctx.fillStyle = '#4a4a6a'; ctx.fillRect(0, 0, 120, 120);
-    ctx.fillStyle = '#6a6a8a'; ctx.fillRect(20, 20, 80, 80);
-    ctx.fillStyle = '#8a8aaa'; ctx.fillRect(40, 10, 40, 20);
-    $('skin-current-name').textContent = 'Default';
-    return;
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath();
+  ctx.ellipse(W/2, H - 16, 50, 10, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  const slim = modelType === 'slim';
+  const armW = slim ? 3 : 4;
+  const s = 8;
+  const headS = 8 * s;
+  const bodyH = 12 * s;
+  const legH = 12 * s;
+  const gap = 2;
+
+  const leftArmX = 0;
+  const bodyX = armW * s + gap;
+  const rightArmX = bodyX + 8 * s + gap;
+
+  let topY = 14;
+  const headY = topY;
+  const torsoY = headY + headS + gap;
+  const legY = torsoY + bodyH + gap;
+
+  ctx.drawImage(img, 8, 8, 8, 8, bodyX, headY, 8*s, 8*s);
+  const hatCanvas = document.createElement('canvas');
+  hatCanvas.width = 64; hatCanvas.height = 64;
+  const hatCtx = hatCanvas.getContext('2d');
+  hatCtx.drawImage(img, 0, 0);
+  const hatData = hatCtx.getImageData(40, 8, 8, 8).data;
+  let hasHat = false;
+  for (let i = 3; i < hatData.length; i += 4) { if (hatData[i] > 0) { hasHat = true; break; } }
+  if (hasHat) {
+    ctx.drawImage(img, 40, 8, 8, 8, bodyX, headY, 8*s, 8*s);
   }
-  const img = new Image();
-  img.onload = () => {
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, 0, 0, 120, 120);
-    $('skin-current-name').textContent = name;
-  };
-  if (data) img.src = 'data:image/png;base64,' + data;
+
+  ctx.drawImage(img, 20, 20, 8, 12, bodyX, torsoY, 8*s, bodyH);
+  const jacketCanvas = document.createElement('canvas');
+  jacketCanvas.width = 64; jacketCanvas.height = 64;
+  const jacketCtx = jacketCanvas.getContext('2d');
+  jacketCtx.drawImage(img, 0, 0);
+  if (img.naturalHeight === 64) {
+    const jacketData = jacketCtx.getImageData(20, 52, 8, 12).data;
+    let hasJacket = false;
+    for (let i = 3; i < jacketData.length; i += 4) { if (jacketData[i] > 0) { hasJacket = true; break; } }
+    if (hasJacket) {
+      ctx.drawImage(img, 20, 52, 8, 12, bodyX, torsoY, 8*s, bodyH);
+    }
+  }
+
+  ctx.drawImage(img, 44, 20, armW, 12, leftArmX, torsoY, armW*s, bodyH);
+  if (img.naturalHeight === 64) {
+    const sleeveLData = jacketCtx.getImageData(44, 52, armW, 12).data;
+    let hasSleeveL = false;
+    for (let i = 3; i < sleeveLData.length; i += 4) { if (sleeveLData[i] > 0) { hasSleeveL = true; break; } }
+    if (hasSleeveL) {
+      ctx.drawImage(img, 44, 52, armW, 12, leftArmX, torsoY, armW*s, bodyH);
+    }
+  }
+
+  let rightArmSrcX = 36, rightArmSrcY = 52;
+  if (img.naturalHeight === 64) {
+    rightArmSrcX = 36; rightArmSrcY = 52;
+  } else {
+    rightArmSrcX = 44; rightArmSrcY = 20;
+  }
+  ctx.drawImage(img, rightArmSrcX, rightArmSrcY, armW, 12, rightArmX, torsoY, armW*s, bodyH);
+  if (img.naturalHeight === 64) {
+    const sleeveRData = jacketCtx.getImageData(52, 52, armW, 12).data;
+    let hasSleeveR = false;
+    for (let i = 3; i < sleeveRData.length; i += 4) { if (sleeveRData[i] > 0) { hasSleeveR = true; break; } }
+    if (hasSleeveR) {
+      ctx.drawImage(img, 52, 52, armW, 12, rightArmX, torsoY, armW*s, bodyH);
+    }
+  }
+
+  ctx.drawImage(img, 4, 20, 4, 12, bodyX, legY, 4*s, legH);
+  if (img.naturalHeight === 64) {
+    const pantsLData = jacketCtx.getImageData(4, 36, 4, 12).data;
+    let hasPantsL = false;
+    for (let i = 3; i < pantsLData.length; i += 4) { if (pantsLData[i] > 0) { hasPantsL = true; break; } }
+    if (hasPantsL) {
+      ctx.drawImage(img, 4, 36, 4, 12, bodyX, legY, 4*s, legH);
+    }
+  }
+
+  let rightLegSrcX = 20, rightLegSrcY = 52;
+  if (img.naturalHeight !== 64) {
+    rightLegSrcX = 4; rightLegSrcY = 20;
+  }
+  ctx.drawImage(img, rightLegSrcX, rightLegSrcY, 4, 12, bodyX + 4*s + gap, legY, 4*s, legH);
+  if (img.naturalHeight === 64) {
+    const pantsR2Data = jacketCtx.getImageData(20, 36, 4, 12).data;
+    let hasPantsR = false;
+    for (let i = 3; i < pantsR2Data.length; i += 4) { if (pantsR2Data[i] > 0) { hasPantsR = true; break; } }
+    if (hasPantsR) {
+      ctx.drawImage(img, 20, 36, 4, 12, bodyX + 4*s + gap, legY, 4*s, legH);
+    }
+  }
 }
 
-async function refreshSkinList() {
+function loadSkinToPreview(skinName, base64Data) {
+  const canvas = $('skin-preview-canvas');
+  if (!canvas) return;
+  $('skin-current-name').textContent = skinName === 'default' ? 'Default' : skinName;
+
+  if (!base64Data || skinName === 'default') {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#4a4a6a';
+    ctx.fillRect(60, 20, 48, 48);
+    ctx.fillStyle = '#5a5a7a';
+    ctx.fillRect(60, 70, 48, 72);
+    ctx.fillStyle = '#3a3a5a';
+    const aw = skinModelType === 'slim' ? 18 : 24;
+    ctx.fillRect(60 - aw - 4, 70, aw, 72);
+    ctx.fillRect(60 + 48 + 4, 70, aw, 72);
+    ctx.fillStyle = '#4a4a6a';
+    ctx.fillRect(60, 144, 22, 72);
+    ctx.fillRect(86, 144, 22, 72);
+    skinPreviewImg = null;
+    return;
+  }
+
+  const img = new Image();
+  img.onload = () => {
+    skinPreviewImg = img;
+    renderCharacterOnCanvas(canvas, img, skinModelType);
+  };
+  img.src = 'data:image/png;base64,' + base64Data;
+}
+
+function renderSkinList() {
   const list = $('skin-list');
   const typeEl = $('skin-account-type');
   const active = accounts.find((a) => a.id === activeAccountId);
-  typeEl.textContent = active?.type === 'microsoft' ? 'Microsoft account — skins apply via Mojang API' : 'Offline account — skins saved locally (use a skin mod to apply)';
-  currentSkins = await window.api.getSavedSkins();
+  if (typeEl) {
+    typeEl.textContent = active?.type === 'microsoft'
+      ? 'Changes apply to your Minecraft account via Mojang API'
+      : 'Skins saved locally — use a skin mod to apply';
+  }
   list.innerHTML = '';
+
   const defaultItem = document.createElement('div');
-  defaultItem.className = 'skin-item' + (activeSkinName === 'default' ? ' active' : '');
-  defaultItem.innerHTML = '<div style="width:32px;height:32px;background:#4a4a6a;border-radius:4px;"></div><span style="font-size:12px;">Default</span>';
-  defaultItem.onclick = () => { activeSkinName = 'default'; loadSkinPreview('default', null); refreshSkinList(); };
+  defaultItem.className = 'skin-list-item' + (activeSkinName === 'default' ? ' active' : '');
+  defaultItem.innerHTML = `<div style="width:32px;height:32px;border-radius:6px;background:var(--bg-deep);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="var(--text-muted)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg></div><span class="skin-list-name">Default</span>`;
+  defaultItem.onclick = () => {
+    activeSkinName = 'default';
+    loadSkinToPreview('default', null);
+    renderSkinList();
+  };
   list.appendChild(defaultItem);
+
   currentSkins.forEach((s) => {
     const el = document.createElement('div');
-    el.className = 'skin-item' + (activeSkinName === s.name ? ' active' : '');
-    el.innerHTML = `<img src="data:image/png;base64,${s.data}" alt=""><span style="font-size:12px;">${s.name}</span>`;
-    el.onclick = () => { activeSkinName = s.name; loadSkinPreview(s.name, s.data); refreshSkinList(); };
+    el.className = 'skin-list-item' + (activeSkinName === s.name ? ' active' : '');
+    el.innerHTML = `<img src="data:image/png;base64,${s.data}" alt=""><span class="skin-list-name">${s.name}</span><button class="skin-list-delete" data-name="${s.name}"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="currentColor"/></svg></button>`;
+    const nameSpan = el.querySelector('.skin-list-name');
+    nameSpan.onclick = () => {
+      activeSkinName = s.name;
+      loadSkinToPreview(s.name, s.data);
+      renderSkinList();
+    };
+    const deleteBtn = el.querySelector('.skin-list-delete');
+    deleteBtn.onclick = async (e) => {
+      e.stopPropagation();
+      const result = await window.api.deleteSkin(s.name);
+      if (result.success) {
+        if (activeSkinName === s.name) {
+          activeSkinName = 'default';
+          loadSkinToPreview('default', null);
+        }
+        currentSkins = await window.api.getSavedSkins();
+        renderSkinList();
+      }
+    };
     list.appendChild(el);
   });
+
+  if (currentSkins.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'skin-list-empty';
+    empty.textContent = 'No saved skins yet.\nUpload a PNG to get started.';
+    list.appendChild(empty);
+  }
 }
 
 $('sidebar-account-badge').onclick = () => {
   $('modal-skin-changer').classList.add('active');
-  refreshSkinList();
-  loadSkinPreview(activeSkinName, currentSkins.find((s) => s.name === activeSkinName)?.data);
+  (async () => {
+    currentSkins = await window.api.getSavedSkins();
+    renderSkinList();
+    const active = currentSkins.find((s) => s.name === activeSkinName);
+    loadSkinToPreview(activeSkinName, active?.data);
+  })();
+};
+
+$('skin-reset-btn').onclick = async () => {
+  activeSkinName = 'default';
+  loadSkinToPreview('default', null);
+  renderSkinList();
+  const active = accounts.find((a) => a.id === activeAccountId);
+  if (active?.type === 'microsoft') {
+    toast('Resetting skin...', 'Applying default via Mojang API');
+    const apply = await window.api.applyMicrosoftSkin('default', 'classic');
+    if (apply.success) toast('Skin reset', 'Default skin applied');
+    else toast('Reset failed', apply.error, 'error');
+  }
 };
 
 $('skin-upload-btn').onclick = () => $('skin-file-input').click();
@@ -1537,12 +1706,13 @@ $('skin-file-input').onchange = async function () {
     const result = await window.api.saveSkinFile(name, base64);
     if (result.success) {
       activeSkinName = name;
-      refreshSkinList();
-      loadSkinPreview(name, base64);
+      currentSkins = await window.api.getSavedSkins();
+      renderSkinList();
+      loadSkinToPreview(name, base64);
       const active = accounts.find((a) => a.id === activeAccountId);
       if (active?.type === 'microsoft') {
         toast('Applying skin...', 'Uploading to Mojang API');
-        const apply = await window.api.applyMicrosoftSkin(result.path, 'classic');
+        const apply = await window.api.applyMicrosoftSkin(result.path, skinModelType === 'slim' ? 'slim' : 'classic');
         if (apply.success) toast('Skin applied', 'Your Minecraft skin has been updated');
         else toast('Skin upload failed', apply.error, 'error');
       } else {
@@ -1556,19 +1726,69 @@ $('skin-file-input').onchange = async function () {
   this.value = '';
 };
 
-$('skin-reset-btn').onclick = async () => {
-  activeSkinName = 'default';
-  loadSkinPreview('default', null);
-  refreshSkinList();
-  const active = accounts.find((a) => a.id === activeAccountId);
-  if (active?.type === 'microsoft') {
-    toast('Resetting skin...', 'Applying default skin via Mojang API');
-    const apply = await window.api.applyMicrosoftSkin('default', 'classic');
-    if (apply.success) toast('Skin reset', 'Default skin applied');
-    else toast('Reset failed', apply.error, 'error');
+$('skin-model-classic').onclick = () => {
+  skinModelType = 'classic';
+  document.querySelectorAll('.model-btn').forEach((b) => b.classList.remove('active'));
+  $('skin-model-classic').classList.add('active');
+  if (skinPreviewImg) {
+    renderCharacterOnCanvas($('skin-preview-canvas'), skinPreviewImg, skinModelType);
   } else {
-    toast('Skin reset', 'Default selected');
+    loadSkinToPreview(activeSkinName, null);
   }
+};
+$('skin-model-slim').onclick = () => {
+  skinModelType = 'slim';
+  document.querySelectorAll('.model-btn').forEach((b) => b.classList.remove('active'));
+  $('skin-model-slim').classList.add('active');
+  if (skinPreviewImg) {
+    renderCharacterOnCanvas($('skin-preview-canvas'), skinPreviewImg, skinModelType);
+  } else {
+    loadSkinToPreview(activeSkinName, null);
+  }
+};
+
+$('skin-namemc-btn').onclick = async () => {
+  const input = $('skin-namemc-input');
+  const username = input.value.trim();
+  if (!username) return;
+  const btn = $('skin-namemc-btn');
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    const result = await window.api.fetchNameMCSkin(username);
+    if (result.success) {
+      const name = result.name || username;
+      const saveResult = await window.api.saveSkinFile(name, result.base64);
+      if (saveResult.success) {
+        if (result.model === 'slim') {
+          skinModelType = 'slim';
+          document.querySelectorAll('.model-btn').forEach((b) => b.classList.remove('active'));
+          $('skin-model-slim').classList.add('active');
+        } else {
+          skinModelType = 'classic';
+          document.querySelectorAll('.model-btn').forEach((b) => b.classList.remove('active'));
+          $('skin-model-classic').classList.add('active');
+        }
+        activeSkinName = name;
+        currentSkins = await window.api.getSavedSkins();
+        renderSkinList();
+        loadSkinToPreview(name, result.base64);
+        toast('Skin fetched', `Loaded ${name}'s skin from NameMC`);
+        input.value = '';
+      } else {
+        toast('Error', saveResult.error, 'error');
+      }
+    } else {
+      toast('NameMC', result.error || 'Player not found', 'error');
+    }
+  } catch (err) {
+    toast('Error', err.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Search';
+};
+$('skin-namemc-input').onkeydown = (e) => {
+  if (e.key === 'Enter') $('skin-namemc-btn').click();
 };
 
 window.api.onMcDownloadProgress((p) => {

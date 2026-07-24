@@ -412,6 +412,51 @@ ipcMain.handle('delete-skin', async (e, name) => {
   } catch (err) { return { success: false, error: err.message }; }
 });
 
+ipcMain.handle('fetch-namemc-skin', async (e, username) => {
+  try {
+    // 1. Get UUID from Mojang API
+    const uuidResp = await fetch(`https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(username)}`);
+    if (!uuidResp.ok) return { success: false, error: 'Player not found' };
+    const uuidData = await uuidResp.json();
+    const uuid = uuidData.id;
+
+    // 2. Get profile including skin data from Mojang session server
+    const profileResp = await fetch(`https://sessionserver.mojang.com/session/minecraft/profile/${uuid}`);
+    if (!profileResp.ok) return { success: false, error: 'Could not fetch skin profile' };
+    const profileData = await profileResp.json();
+
+    // 3. Parse the texture property
+    const textureProp = profileData.properties?.find((p) => p.name === 'textures');
+    if (!textureProp) return { success: false, error: 'No skin data found' };
+    const textureData = JSON.parse(Buffer.from(textureProp.value, 'base64').toString('utf8'));
+    const skinUrl = textureData.textures?.SKIN?.url;
+    if (!skinUrl) return { success: false, error: 'No skin URL found' };
+
+    // 4. Determine model type (slim/normal)
+    const model = textureData.textures?.SKIN?.metadata?.model || 'classic';
+
+    // 5. Download the skin image
+    const skinResp = await fetch(skinUrl);
+    if (!skinResp.ok) return { success: false, error: 'Could not download skin' };
+    const skinBuf = Buffer.from(await skinResp.arrayBuffer());
+    const base64 = skinBuf.toString('base64');
+
+    // Try to also get name from NameMC for better display name
+    let displayName = username;
+    try {
+      const namemcResp = await fetch(`https://api.namemc.com/profile/${uuid}`, { signal: AbortSignal.timeout(5000) });
+      if (namemcResp.ok) {
+        const nmData = await namemcResp.json();
+        if (nmData?.name) displayName = nmData.name;
+      }
+    } catch {}
+
+    return { success: true, base64, model: model === 'slim' ? 'slim' : 'classic', uuid, name: displayName };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('apply-microsoft-skin', async (e, { skinPath, variant }) => {
   try {
     const accounts = getSavedAccounts();
