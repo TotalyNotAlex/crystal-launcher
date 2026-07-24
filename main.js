@@ -27,6 +27,7 @@ const rpcService = require('./services/rpcService');
 let mainWindow = null;
 const isUpdateRestart = process.argv.includes('--updated');
 const baseDataDir = path.join(app.getPath('userData'), '.crystall');
+const windowStateFile = path.join(baseDataDir, 'window-state.json');
 const accountsFile = path.join(baseDataDir, 'accounts.json');
 const settingsFile = path.join(baseDataDir, 'settings.json');
 const serversFile = path.join(baseDataDir, 'servers.json');
@@ -135,17 +136,34 @@ function checkJava() {
   return { found: false, version: null, full: null, path: null };
 }
 
+function saveWindowState() {
+  if (!mainWindow) return;
+  try {
+    const bounds = mainWindow.getBounds();
+    const maximized = mainWindow.isMaximized();
+    fs.writeFileSync(windowStateFile, JSON.stringify({ bounds, maximized }, null, 2));
+  } catch {}
+}
+
 function createWindow() {
+  let bounds = { width: 960, height: 660 };
+  let maximized = false;
+  try {
+    if (fs.existsSync(windowStateFile)) {
+      const saved = JSON.parse(fs.readFileSync(windowStateFile, 'utf8'));
+      if (saved.bounds) bounds = saved.bounds;
+      if (saved.maximized) maximized = true;
+    }
+  } catch {}
+
   mainWindow = new BrowserWindow({
-    width: 960,
-    height: 660,
+    ...bounds,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
     hasShadow: false,
     thickFrame: false,
     resizable: true,
-    center: true,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -154,8 +172,13 @@ function createWindow() {
     },
   });
 
+  if (maximized) mainWindow.maximize();
   mainWindow.loadFile('index.html');
   mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.on('resize', saveWindowState);
+  mainWindow.on('move', saveWindowState);
+  mainWindow.on('maximize', saveWindowState);
+  mainWindow.on('unmaximize', saveWindowState);
 }
 
 app.whenReady().then(() => {
@@ -364,12 +387,64 @@ ipcMain.handle('get-crash-logs', async () => {
   for (const entry of fs.readdirSync(crashDir).sort().reverse().slice(0, 20)) {
     const filePath = path.join(crashDir, entry);
     try {
-      const content = fs.readFileSync(filePath, 'utf8').substring(0, 2000);
+      const content = fs.readFileSync(filePath, 'utf8').substring(0, 5000);
       const time = fs.statSync(filePath).mtimeMs;
       logs.push({ name: entry, time, content });
     } catch {}
   }
   return logs;
+});
+
+ipcMain.handle('read-crash-log', async (e, fileName) => {
+  const filePath = path.join(baseDataDir, 'game', 'crash-reports', fileName);
+  if (!fs.existsSync(filePath)) return null;
+  try { return fs.readFileSync(filePath, 'utf8'); } catch { return null; }
+});
+
+ipcMain.handle('check-mod-updates', async (e, profileId) => {
+  try {
+    const mods = profileService.listMods(profileId);
+    const results = [];
+    for (const mod of mods) {
+      const name = mod.name.replace(/\.jar$/i, '').replace(/-\d+[\d.]*.*/g, '').trim();
+      if (!name) continue;
+      try {
+        const res = await axios.get(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(name)}&limit=1&index=downloads`, { timeout: 5000 });
+        const hit = res.data?.hits?.[0];
+        if (hit) results.push({ fileName: mod.fileName, name: mod.name, enabled: mod.enabled, latestVersion: hit.version_number || hit.latest_version, slug: hit.slug, hasUpdate: false });
+      } catch {}
+    }
+    return results;
+  } catch (err) { return []; }
+});
+
+ipcMain.handle('download-mc-version', async (e, { version, loaderType }) => {
+  try {
+    const { execSync } = require('child_process');
+    const versionsDir = path.join(baseDataDir, 'game', 'versions');
+    const verDir = path.join(versionsDir, version);
+    if (fs.existsSync(path.join(verDir, `${version}.json`))) return { success: true, cached: true };
+    e.sender.send('mc-download-progress', { percent: 10, status: `Downloading Minecraft ${version}...` });
+    const manifest = (await axios.get('https://launchermeta.mojang.com/mc/game/version_manifest_v2.json', { timeout: 10000 })).data;
+    const entry = manifest.versions.find((v) => v.id === version);
+    if (!entry) throw new Error(`Version ${version} not found`);
+    const meta = (await axios.get(entry.url, { timeout: 10000 })).data;
+    if (!fs.existsSync(verDir)) fs.mkdirSync(verDir, { recursive: true });
+    fs.writeFileSync(path.join(verDir, `${version}.json`), JSON.stringify(meta));
+    e.sender.send('mc-download-progress', { percent: 30, status: `Downloading client jar for ${version}...` });
+    const clientUrl = meta.downloads?.client?.url;
+    if (clientUrl) {
+      const jarPath = path.join(verDir, `${version}.jar`);
+      const jarRes = await axios.get(clientUrl, { responseType: 'stream', timeout: 120000 });
+      const jarWriter = fs.createWriteStream(jarPath);
+      const total = parseInt(jarRes.headers['content-length'] || '0');
+      let dl = 0;
+      jarRes.data.on('data', (c) => { dl += c.length; if (total) e.sender.send('mc-download-progress', { percent: 30 + Math.round((dl / total) * 60), status: `Downloading ${version}.jar...` }); });
+      await new Promise((r) => { jarWriter.on('finish', r); jarRes.data.pipe(jarWriter); });
+    }
+    e.sender.send('mc-download-progress', { percent: 100, status: `${version} ready` });
+    return { success: true };
+  } catch (err) { return { success: false, error: err.message }; }
 });
 
 ipcMain.handle('get-playtime', async () => {

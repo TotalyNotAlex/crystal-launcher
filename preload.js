@@ -83,4 +83,8 @@ contextBridge.exposeInMainWorld('api', {
   onLaunchLog: (cb) => ipcRenderer.on('launch-log', (e, d) => cb(d)),
   onGlobalError: (cb) => ipcRenderer.on('global-error', (e, d) => cb(d)),
   onModDownloadProgress: (cb) => ipcRenderer.on('mod-download-progress', (e, d) => cb(d)),
+  readCrashLog: (fileName) => ipcRenderer.invoke('read-crash-log', fileName),
+  checkModUpdates: (profileId) => ipcRenderer.invoke('check-mod-updates', profileId),
+  downloadMcVersion: (version, loaderType) => ipcRenderer.invoke('download-mc-version', { version, loaderType }),
+  onMcDownloadProgress: (cb) => ipcRenderer.on('mc-download-progress', (e, d) => cb(d)),
 });

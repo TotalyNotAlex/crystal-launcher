@@ -229,6 +229,52 @@ html, body {
 
 .loading-java-progress { margin-top: 8px; }
 
+/* Play account bar */
+.play-account-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+.play-account-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-switch-select {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+}
+.account-switch-select:focus { border-color: var(--accent); }
+
+/* Wizard */
+.wizard-dialog { max-width: 380px !important; }
+.wizard-step { padding: 8px 0; }
+
+/* Crash log modal */
+#crash-log-content { user-select: text; }
+
+.mod-update-badge {
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 6px;
+  margin-left: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
 #main-app {
   flex: 1;
   display: flex;

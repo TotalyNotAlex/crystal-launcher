@@ -35,6 +35,7 @@
       <div class="loading-title" data-i18n="app.name">Crystal Launcher</div>
       <div class="loading-status" id="loading-status">Initializing...</div>
       <div class="loading-detail" id="loading-detail"></div>
+      <div class="loading-offline" id="loading-offline" style="display:none;color:var(--text-muted);font-size:11px;margin-top:4px;">No internet connection — limited functionality</div>
     </div>
 
     <div id="toast-container"></div>
@@ -94,6 +95,18 @@
 
         <!-- PLAY VIEW -->
         <div class="view active" id="view-play">
+          <div class="play-account-bar" id="play-account-bar">
+            <div class="play-account-info" id="play-account-info">
+              <div class="badge-avatar" style="width:24px;height:24px;">
+                <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+              </div>
+              <span id="play-account-name" style="font-size:12px;font-weight:500;color:var(--text);">No account</span>
+              <span id="play-account-type" style="font-size:10px;color:var(--text-muted);margin-left:4px;"></span>
+            </div>
+            <div class="play-account-switch" id="play-account-switch">
+              <select id="play-account-select" class="account-switch-select"></select>
+            </div>
+          </div>
           <div class="hero">
             <div class="hero-text">
               <h2 data-i18n="play.ready">Ready to play?</h2>
@@ -241,10 +254,21 @@
 
           <!-- INSTALLED TAB -->
           <div class="mods-panel" id="mods-installed">
-            <div class="mods-installed-header">
-              <span data-i18n="mods.installed_for">Mods for current profile</span>
-              <button class="btn btn-secondary" id="mods-open-folder-btn" data-i18n="mods.open_folder">Open Folder</button>
+            <div class="mod-header">
+              <h3><span id="mod-count">0</span> mods installed</h3>
+              <div style="display:flex;gap:4px;">
+                <select id="mods-sort-select" class="mods-filter-select" style="flex:0;font-size:10px;">
+                  <option value="name">Name</option>
+                  <option value="size">Size</option>
+                  <option value="date">Date</option>
+                  <option value="enabled">Enabled</option>
+                </select>
+                <button class="btn btn-secondary" id="mods-check-updates-btn" data-i18n="mods.check_updates" style="font-size:10px;padding:3px 8px;">Check Updates</button>
+                <button class="btn btn-secondary" id="mods-open-folder-btn" data-i18n="mods.open_folder" style="font-size:10px;padding:3px 8px;">Open Folder</button>
+              </div>
             </div>
+            <div class="mods-installed-list" id="mods-installed-list"></div>
+          </div>
             <div class="mod-list" id="mods-installed-list">
               <div class="mod-empty" data-i18n="mods.placeholder_installed">No mods installed yet.</div>
             </div>
@@ -541,6 +565,71 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- FIRST-RUN WIZARD -->
+  <div class="modal-overlay" id="modal-wizard" style="z-index:2000;">
+    <div class="modal modal-narrow wizard-dialog">
+      <div class="wizard-step" id="wizard-step-1">
+        <div style="text-align:center;padding:20px 0;">
+          <svg width="64" height="64" viewBox="0 0 24 24" style="fill:var(--accent);margin-bottom:16px;"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          <h2 style="color:var(--text);font-size:20px;font-weight:700;">Welcome to Crystal Launcher</h2>
+          <p style="color:var(--text-dim);font-size:13px;margin-top:8px;">Let's get you set up in a few quick steps.</p>
+        </div>
+        <button class="btn btn-primary" onclick="showWizardStep(2)" style="width:100%;padding:12px;font-size:14px;">Get Started</button>
+      </div>
+      <div class="wizard-step" id="wizard-step-2" style="display:none;">
+        <h3 style="color:var(--text);font-size:16px;font-weight:600;margin-bottom:12px;">1. Add an Account</h3>
+        <p style="color:var(--text-dim);font-size:12px;margin-bottom:16px;">You can play offline or sign in with Microsoft.</p>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button class="btn btn-primary" id="wizard-offline" style="padding:10px;font-size:13px;">Play Offline</button>
+          <button class="btn btn-secondary" id="wizard-microsoft" style="padding:10px;font-size:13px;">Sign in with Microsoft</button>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;">
+          <input type="text" id="wizard-offline-name" class="mods-search-input" placeholder="Enter your username..." style="display:none;flex:1;">
+          <button class="btn btn-primary" id="wizard-offline-confirm" style="display:none;">OK</button>
+        </div>
+        <div id="wizard-account-status" style="margin-top:8px;font-size:12px;color:var(--success);"></div>
+      </div>
+      <div class="wizard-step" id="wizard-step-3" style="display:none;">
+        <h3 style="color:var(--text);font-size:16px;font-weight:600;margin-bottom:12px;">2. Create a Profile</h3>
+        <p style="color:var(--text-dim);font-size:12px;margin-bottom:16px;">Choose your Minecraft version and mod loader.</p>
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <select id="wizard-loader" class="mods-filter-select" style="flex:1;">
+            <option value="vanilla">Vanilla</option>
+            <option value="fabric">Fabric</option>
+            <option value="forge">Forge</option>
+          </select>
+          <select id="wizard-version" class="mods-filter-select" style="flex:1;"></select>
+        </div>
+        <button class="btn btn-primary" id="wizard-create-profile" style="width:100%;padding:10px;font-size:13px;">Create Profile</button>
+        <div id="wizard-profile-status" style="margin-top:8px;font-size:12px;color:var(--success);"></div>
+      </div>
+      <div class="wizard-step" id="wizard-step-4" style="display:none;">
+        <div style="text-align:center;padding:20px 0;">
+          <svg width="48" height="48" viewBox="0 0 24 24" style="fill:var(--success);margin-bottom:12px;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          <h2 style="color:var(--text);font-size:18px;font-weight:700;">All Set!</h2>
+          <p style="color:var(--text-dim);font-size:13px;margin-top:8px;">You're ready to play Minecraft.</p>
+        </div>
+        <button class="btn btn-primary" id="wizard-finish" style="width:100%;padding:12px;font-size:14px;">Let's Play</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CRASH LOG MODAL -->
+  <div class="modal-overlay" id="modal-crash-log">
+    <div class="modal modal-wide">
+      <div class="modal-mod-header">
+        <div>
+          <h3 style="color:var(--text);font-size:16px;">Crash Report</h3>
+          <div class="modal-mod-author" id="crash-log-name">Error details</div>
+        </div>
+      </div>
+      <pre id="crash-log-content" style="background:var(--bg-deep);color:var(--text-dim);padding:12px;border-radius:var(--radius-sm);font-size:11px;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:12px 0;font-family:monospace;"></pre>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('modal-crash-log').classList.remove('active')" data-i18n="profiles.cancel">Close</button>
+      </div>
+    </div>
   </div>
 
   <script src="renderer.js"></script>

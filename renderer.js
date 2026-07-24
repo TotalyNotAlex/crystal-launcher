@@ -65,6 +65,24 @@ setTimeout(() => { loadingOverlay?.classList.add('hidden'); mainApp?.classList.a
 
 window.api.onGlobalError?.((msg) => toast('Error', msg, 'error', 10000));
 
+let isOffline = false;
+async function checkOnline() {
+  try {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 3000);
+    await fetch('https://api.modrinth.com/v2', { signal: controller.signal, method: 'HEAD' });
+    isOffline = false;
+  } catch {
+    isOffline = true;
+  }
+  const badge = $('loading-offline');
+  if (badge) badge.style.display = isOffline ? 'block' : 'none';
+  const navs = document.querySelectorAll('.nav-item');
+  if (isOffline) navs.forEach((n) => { if (n.dataset.view === 'mods' || n.dataset.view === 'news') n.style.opacity = '0.4'; });
+  else navs.forEach((n) => n.style.opacity = '1');
+}
+checkOnline();
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     document.querySelectorAll('.modal.active').forEach((m) => m.classList.remove('active'));
@@ -630,16 +648,11 @@ async function refreshInstalledMods() {
   if (!pid) { $('mods-installed-list').innerHTML = `<div class="mod-empty">${t('mods.no_profile')}</div>`; return; }
   try {
     const mods = await window.api.getMods(pid);
+    installedModsCache = mods;
     const list = $('mods-installed-list');
     list.innerHTML = '';
-    if (!mods.length) { list.innerHTML = `<div class="mod-empty">${t('mods.no_mods')}</div>`; return; }
-    mods.forEach((m) => {
-      const el = document.createElement('div');
-      el.className = 'mod-item';
-      el.innerHTML = `<span class="mod-name">${m.name}</span><label class="toggle"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span class="toggle-slider"></span></label>`;
-      el.querySelector('input').onchange = async function () { await window.api.toggleMod(pid, m.fileName, this.checked); refreshInstalledMods(); };
-      list.appendChild(el);
-    });
+    if (!mods.length) { list.innerHTML = `<div class="mod-empty drag-target">${t('mods.no_mods')}</div>`; return; }
+    renderInstalledMods();
   } catch (e) { console.error(e); }
 }
 
@@ -695,11 +708,12 @@ async function loadMods(pid) {
     const mods = await window.api.getMods(pid);
     $('mod-count').textContent = mods.length;
     const list = $('mod-list');
+    const sorted = sortMods(mods, modSortBy);
     list.innerHTML = '';
-    if (!mods.length) {
+    if (!sorted.length) {
       list.innerHTML = `<div class="mod-empty drag-target">${t('profiles.no_mods')} — Drop .jar files here</div>`;
     }
-    mods.forEach((m) => {
+    sorted.forEach((m) => {
       const el = document.createElement('div');
       el.className = 'mod-item';
       el.innerHTML = `<span class="mod-name">${m.name}</span><span class="mod-size" style="color:var(--text-muted);font-size:10px;margin-right:auto;margin-left:8px;">${(m.size / 1024).toFixed(0)} KB</span><label class="toggle"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span class="toggle-slider"></span></label>`;
@@ -749,6 +763,7 @@ $('btn-delete-confirm').onclick = async () => {
 };
 
 function updateAccounts() {
+  updatePlayAccountBar();
   const list = $('account-list');
   list.innerHTML = '';
   const active = accounts.find((a) => a.id === activeAccountId) || accounts[0];
@@ -1121,7 +1136,7 @@ $('btn-play').onclick = async function () {
   this.disabled = true; this.textContent = t('play.launching');
   const pc = $('progress-container');
   pc.classList.add('active');
-  $('progress-text').textContent = t('play.prepare');
+  $('progress-text').textContent = 'Preparing...';
   $('progress-fill').style.width = '0%';
 
   let launchProfile = profiles.find((p) => p.id === activeProfileId);
@@ -1129,9 +1144,18 @@ $('btn-play').onclick = async function () {
     launchProfile = { id: activeProfileId || 'transient', name: `${loaderNames[currentLoader]} ${currentVersion}`, loaderType: currentLoader, mcVersion: currentVersion, ram: currentRam };
   }
 
+  const pcText = $('progress-text');
+  try {
+    if (!isOffline) {
+      pcText.textContent = `Ensuring Minecraft ${currentVersion}...`;
+      await window.api.downloadMcVersion(currentVersion, currentLoader);
+    }
+  } catch {}
+
+  pcText.textContent = 'Launching...';
   const result = await window.api.launchGame(launchProfile.id, activeAccountId);
   if (result.success) {
-    $('progress-text').textContent = t('play.running');
+    pcText.textContent = t('play.running');
     $('progress-fill').style.width = '100%';
     toast(t('play.started'), t('play.started_msg', { version: currentVersion }));
     setTimeout(() => { this.disabled = false; this.textContent = t('play.btn'); pc.classList.remove('active'); }, 3000);
@@ -1139,12 +1163,178 @@ $('btn-play').onclick = async function () {
     let msg = result.error || t('toast.error');
     if (msg.includes('Java not found')) msg += ' Download Java at https://adoptium.net';
     toast(t('play.error'), msg, 'error');
-    this.disabled = false; this.textContent = t('play.btn'); pc.classList.remove('active');
+    pcText.textContent = 'Launch failed';
+    this.disabled = false; this.textContent = t('play.btn');
+    setTimeout(() => pc.classList.remove('active'), 1000);
+    window.api.getCrashLogs().then((logs) => {
+      if (logs.length) {
+        const latest = logs[0];
+        $('crash-log-name').textContent = latest.name;
+        $('crash-log-content').textContent = latest.content;
+        $('modal-crash-log').classList.add('active');
+      }
+    });
   }
 };
 
 window.api.onLaunchProgress((p) => { if (p.percent) $('progress-fill').style.width = `${p.percent}%`; });
 window.api.onLaunchStatus((s) => { $('progress-text').textContent = s; });
+
+// First-Run Wizard
+let wizardResolve = null;
+
+function showWizardStep(n) {
+  document.querySelectorAll('.wizard-step').forEach((s) => s.style.display = 'none');
+  const step = $('wizard-step-' + n);
+  if (step) step.style.display = 'block';
+}
+
+$('wizard-offline').onclick = () => {
+  const nameInput = $('wizard-offline-name');
+  const confirmBtn = $('wizard-offline-confirm');
+  nameInput.style.display = 'inline-block';
+  confirmBtn.style.display = 'inline-block';
+  nameInput.focus();
+};
+
+$('wizard-offline-confirm').onclick = async () => {
+  const name = $('wizard-offline-name').value.trim() || 'Player';
+  const account = await window.api.createOfflineAccount(name);
+  accounts = await window.api.getAccounts();
+  activeAccountId = account.id;
+  saveSettings();
+  $('wizard-account-status').textContent = `Account "${name}" created`;
+  $('wizard-offline-name').style.display = 'none';
+  $('wizard-offline-confirm').style.display = 'none';
+  setTimeout(() => showWizardStep(3), 800);
+};
+
+$('wizard-microsoft').onclick = async () => {
+  $('wizard-account-status').textContent = 'Opening browser for Microsoft login...';
+  const result = await window.api.loginMicrosoft();
+  if (result.success) {
+    accounts = await window.api.getAccounts();
+    activeAccountId = result.account.id;
+    saveSettings();
+    $('wizard-account-status').textContent = `Signed in as ${result.account.name}`;
+    setTimeout(() => showWizardStep(3), 800);
+  } else {
+    $('wizard-account-status').style.color = 'var(--danger)';
+    $('wizard-account-status').textContent = `Login failed: ${result.error}`;
+  }
+};
+
+$('wizard-create-profile').onclick = async () => {
+  const loader = $('wizard-loader').value;
+  const version = $('wizard-version').value;
+  if (!version) return;
+  const name = `${loader === 'vanilla' ? 'Vanilla' : loader.charAt(0).toUpperCase() + loader.slice(1)} ${version}`;
+  await window.api.saveProfile({ name, loaderType: loader, mcVersion: version, ram: 4 });
+  profiles = await window.api.getProfiles();
+  activeProfileId = profiles[profiles.length - 1]?.id;
+  saveSettings();
+  $('wizard-profile-status').textContent = `Profile "${name}" created`;
+  setTimeout(() => showWizardStep(4), 800);
+};
+
+$('wizard-finish').onclick = () => {
+  $('modal-wizard').classList.remove('active');
+  updateAccounts();
+  updateProfiles();
+  if (activeProfileId) loadMods(activeProfileId);
+};
+
+// Account Quick-Switch
+function updatePlayAccountBar() {
+  const nameEl = $('play-account-name');
+  const typeEl = $('play-account-type');
+  const select = $('play-account-select');
+  if (!nameEl) return;
+  const active = accounts.find((a) => a.id === activeAccountId) || accounts[0];
+  nameEl.textContent = active?.name || 'No account';
+  typeEl.textContent = active ? (active.type === 'microsoft' ? 'Microsoft' : 'Offline') : '';
+  select.innerHTML = '';
+  accounts.forEach((a) => {
+    const opt = document.createElement('option');
+    opt.value = a.id;
+    opt.textContent = `${a.name} (${a.type === 'microsoft' ? 'MS' : 'Offline'})`;
+    if (a.id === activeAccountId) opt.selected = true;
+    select.appendChild(opt);
+  });
+  if (!accounts.length) {
+    const opt = document.createElement('option');
+    opt.textContent = 'Add account in Settings';
+    select.appendChild(opt);
+  }
+}
+
+$('play-account-select').onchange = function () {
+  const id = this.value;
+  if (id && accounts.some((a) => a.id === id)) {
+    activeAccountId = id;
+    saveSettings();
+    updatePlayAccountBar();
+    updateAccounts();
+  }
+};
+
+// Mod sorting + updates
+let installedModsCache = [];
+let modSortBy = 'name';
+
+$('mods-sort-select').onchange = function () {
+  modSortBy = this.value;
+  renderInstalledMods();
+};
+
+function sortMods(mods, by) {
+  const sorted = [...mods];
+  switch (by) {
+    case 'name': sorted.sort((a, b) => a.name.localeCompare(b.name)); break;
+    case 'size': sorted.sort((a, b) => (b.size || 0) - (a.size || 0)); break;
+    case 'date': sorted.sort((a, b) => (b.modified || 0) - (a.modified || 0)); break;
+    case 'enabled': sorted.sort((a, b) => (a.enabled === b.enabled ? 0 : a.enabled ? -1 : 1)); break;
+  }
+  return sorted;
+}
+
+function renderInstalledMods() {
+  const pid = activeProfileId || profiles[0]?.id;
+  if (!pid) return;
+  const list = $('mods-installed-list');
+  const sorted = sortMods(installedModsCache, modSortBy);
+  list.innerHTML = '';
+  if (!sorted.length) {
+    list.innerHTML = `<div class="mod-empty drag-target">${t('profiles.no_mods')} — Drop .jar files here</div>`;
+    return;
+  }
+  sorted.forEach((m) => {
+    const el = document.createElement('div');
+    el.className = 'mod-item';
+    const hasUpdate = m._hasUpdate;
+    el.innerHTML = `<span class="mod-name">${m.name}</span>${hasUpdate ? '<span class="mod-update-badge">Update</span>' : ''}<span class="mod-size" style="color:var(--text-muted);font-size:10px;margin-left:auto;margin-right:8px;">${(m.size / 1024).toFixed(0)} KB</span><label class="toggle"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span class="toggle-slider"></span></label>`;
+    el.querySelector('input').onchange = async function () { await window.api.toggleMod(pid, m.fileName, this.checked); refreshInstalledMods(); };
+    list.appendChild(el);
+  });
+}
+
+$('mods-check-updates-btn').onclick = async function () {
+  this.disabled = true;
+  this.textContent = 'Checking...';
+  const pid = activeProfileId || profiles[0]?.id;
+  if (!pid) return;
+  const updates = await window.api.checkModUpdates(pid);
+  let count = 0;
+  installedModsCache.forEach((m) => {
+    const found = updates.find((u) => u.fileName === m.fileName);
+    m._hasUpdate = !!found;
+    if (m._hasUpdate) count++;
+  });
+  renderInstalledMods();
+  this.disabled = false;
+  this.textContent = count ? `${count} updates found` : 'Up to date';
+  setTimeout(() => { this.textContent = 'Check Updates'; }, 3000);
+};
 
 // Init
 async function init() {
@@ -1188,11 +1378,13 @@ async function init() {
     }
 
     updateAccounts();
+    updatePlayAccountBar();
     updateProfiles();
     $('trigger-loader-text').textContent = loaderNames[currentLoader];
     document.querySelectorAll('#menu-loader .dropdown-option').forEach((o) => o.classList.toggle('selected', o.dataset.value === currentLoader));
     populateVersions(currentLoader);
 
+    const isFirstRun = !accounts.length && !profiles.length;
     const java = await window.api.checkJava();
     if (java.found) {
       $('java-status').innerHTML = `<span style="color:var(--success)">&#9679;</span> ${t('settings.java_found', { version: java.version })} ${java.path ? '' : '(from PATH)'}`;
@@ -1204,6 +1396,15 @@ async function init() {
         mainApp.classList.add('visible');
         mainTitlebar.classList.remove('hidden');
         window.api.rpcSetView('play');
+        if (isFirstRun) {
+          $('modal-wizard').classList.add('active');
+          showWizardStep(1);
+          const wizVer = $('wizard-version');
+          if (wizVer && fullVersions.length) {
+            wizVer.innerHTML = fullVersions.map((v) => `<option value="${v}">${v}</option>`).join('');
+            wizVer.value = currentVersion;
+          }
+        }
       }, 800);
     } else {
       loadingStatus.textContent = 'Downloading Java 17...';
@@ -1223,6 +1424,15 @@ async function init() {
           loadingOverlay.classList.add('hidden');
           mainApp.classList.add('visible');
           mainTitlebar.classList.remove('hidden');
+          if (isFirstRun) {
+            $('modal-wizard').classList.add('active');
+            showWizardStep(1);
+            const wizVer = $('wizard-version');
+            if (wizVer && fullVersions.length) {
+              wizVer.innerHTML = fullVersions.map((v) => `<option value="${v}">${v}</option>`).join('');
+              wizVer.value = currentVersion;
+            }
+          }
         }, 800);
       } else {
         $('java-status').innerHTML = `<span style="color:var(--danger)">&#9679;</span> Java download failed: ${result.error} <button class="btn btn-secondary" id="loading-java-retry" style="font-size:10px;padding:2px 8px;margin-left:6px;">Retry</button>`;
@@ -1249,6 +1459,13 @@ async function init() {
     }, 1000);
   }
 }
+
+window.api.onMcDownloadProgress((p) => {
+  const pc = $('progress-text');
+  if (pc && p.status) pc.textContent = p.status;
+  const fill = $('progress-fill');
+  if (fill && p.percent) fill.style.width = `${p.percent}%`;
+});
 
 window.api.onJavaInstallProgress((p) => {
   const pct = $('java-dl-pct');
