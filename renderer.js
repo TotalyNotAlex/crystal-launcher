@@ -1486,102 +1486,76 @@ function renderCharacterOnCanvas(canvas, img, modelType) {
   const H = canvas.height;
   ctx.clearRect(0, 0, W, H);
 
-  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  const grad = ctx.createRadialGradient(W/2, H - 12, 2, W/2, H - 12, 50);
+  grad.addColorStop(0, 'rgba(0,0,0,0.45)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
   ctx.beginPath();
-  ctx.ellipse(W/2, H - 16, 50, 10, 0, 0, Math.PI*2);
+  ctx.ellipse(W/2, H - 12, 50, 9, 0, 0, Math.PI*2);
   ctx.fill();
 
   const slim = modelType === 'slim';
   const armW = slim ? 3 : 4;
   const s = 8;
+  const gap = 1;
   const headS = 8 * s;
+  const bodyW = 8 * s;
   const bodyH = 12 * s;
   const legH = 12 * s;
-  const gap = 2;
+  const armWpx = armW * s;
 
-  const leftArmX = 0;
-  const bodyX = armW * s + gap;
-  const rightArmX = bodyX + 8 * s + gap;
+  const totalW = armWpx + gap*s + bodyW + gap*s + armWpx;
+  const totalH = headS + gap*s + bodyH + gap*s + legH;
+  const startX = (W - totalW) / 2;
+  const startY = (H - totalH) / 2 - 6;
 
-  let topY = 14;
-  const headY = topY;
-  const torsoY = headY + headS + gap;
-  const legY = torsoY + bodyH + gap;
+  const leftArmX = startX;
+  const bodyX = startX + armWpx + gap*s;
+  const rightArmX = bodyX + bodyW + gap*s;
+  const headY = startY;
+  const torsoY = headY + headS + gap*s;
+  const legY = torsoY + bodyH + gap*s;
+
+  const ovC = document.createElement('canvas');
+  ovC.width = 64; ovC.height = 64;
+  const ovCtx = ovC.getContext('2d');
+  ovCtx.drawImage(img, 0, 0);
+  const isHd = img.naturalHeight === 64;
 
   ctx.drawImage(img, 8, 8, 8, 8, bodyX, headY, 8*s, 8*s);
-  const hatCanvas = document.createElement('canvas');
-  hatCanvas.width = 64; hatCanvas.height = 64;
-  const hatCtx = hatCanvas.getContext('2d');
-  hatCtx.drawImage(img, 0, 0);
-  const hatData = hatCtx.getImageData(40, 8, 8, 8).data;
-  let hasHat = false;
-  for (let i = 3; i < hatData.length; i += 4) { if (hatData[i] > 0) { hasHat = true; break; } }
-  if (hasHat) {
-    ctx.drawImage(img, 40, 8, 8, 8, bodyX, headY, 8*s, 8*s);
-  }
+  const hatData = ovCtx.getImageData(40, 8, 8, 8).data;
+  for (let i = 3; i < hatData.length; i += 4) { if (hatData[i] > 0) { ctx.drawImage(img, 40, 8, 8, 8, bodyX, headY, 8*s, 8*s); break; } }
 
   ctx.drawImage(img, 20, 20, 8, 12, bodyX, torsoY, 8*s, bodyH);
-  const jacketCanvas = document.createElement('canvas');
-  jacketCanvas.width = 64; jacketCanvas.height = 64;
-  const jacketCtx = jacketCanvas.getContext('2d');
-  jacketCtx.drawImage(img, 0, 0);
-  if (img.naturalHeight === 64) {
-    const jacketData = jacketCtx.getImageData(20, 52, 8, 12).data;
-    let hasJacket = false;
-    for (let i = 3; i < jacketData.length; i += 4) { if (jacketData[i] > 0) { hasJacket = true; break; } }
-    if (hasJacket) {
-      ctx.drawImage(img, 20, 52, 8, 12, bodyX, torsoY, 8*s, bodyH);
-    }
+  if (isHd) {
+    const jData = ovCtx.getImageData(20, 52, 8, 12).data;
+    for (let i = 3; i < jData.length; i += 4) { if (jData[i] > 0) { ctx.drawImage(img, 20, 52, 8, 12, bodyX, torsoY, 8*s, bodyH); break; } }
   }
 
   ctx.drawImage(img, 44, 20, armW, 12, leftArmX, torsoY, armW*s, bodyH);
-  if (img.naturalHeight === 64) {
-    const sleeveLData = jacketCtx.getImageData(44, 52, armW, 12).data;
-    let hasSleeveL = false;
-    for (let i = 3; i < sleeveLData.length; i += 4) { if (sleeveLData[i] > 0) { hasSleeveL = true; break; } }
-    if (hasSleeveL) {
-      ctx.drawImage(img, 44, 52, armW, 12, leftArmX, torsoY, armW*s, bodyH);
-    }
+  if (isHd) {
+    const slData = ovCtx.getImageData(44, 52, armW, 12).data;
+    for (let i = 3; i < slData.length; i += 4) { if (slData[i] > 0) { ctx.drawImage(img, 44, 52, armW, 12, leftArmX, torsoY, armW*s, bodyH); break; } }
   }
 
-  let rightArmSrcX = 36, rightArmSrcY = 52;
-  if (img.naturalHeight === 64) {
-    rightArmSrcX = 36; rightArmSrcY = 52;
-  } else {
-    rightArmSrcX = 44; rightArmSrcY = 20;
-  }
-  ctx.drawImage(img, rightArmSrcX, rightArmSrcY, armW, 12, rightArmX, torsoY, armW*s, bodyH);
-  if (img.naturalHeight === 64) {
-    const sleeveRData = jacketCtx.getImageData(52, 52, armW, 12).data;
-    let hasSleeveR = false;
-    for (let i = 3; i < sleeveRData.length; i += 4) { if (sleeveRData[i] > 0) { hasSleeveR = true; break; } }
-    if (hasSleeveR) {
-      ctx.drawImage(img, 52, 52, armW, 12, rightArmX, torsoY, armW*s, bodyH);
-    }
+  const rArmSX = isHd ? 36 : 44, rArmSY = isHd ? 52 : 20;
+  ctx.drawImage(img, rArmSX, rArmSY, armW, 12, rightArmX, torsoY, armW*s, bodyH);
+  if (isHd) {
+    const srData = ovCtx.getImageData(52, 52, armW, 12).data;
+    for (let i = 3; i < srData.length; i += 4) { if (srData[i] > 0) { ctx.drawImage(img, 52, 52, armW, 12, rightArmX, torsoY, armW*s, bodyH); break; } }
   }
 
   ctx.drawImage(img, 4, 20, 4, 12, bodyX, legY, 4*s, legH);
-  if (img.naturalHeight === 64) {
-    const pantsLData = jacketCtx.getImageData(4, 36, 4, 12).data;
-    let hasPantsL = false;
-    for (let i = 3; i < pantsLData.length; i += 4) { if (pantsLData[i] > 0) { hasPantsL = true; break; } }
-    if (hasPantsL) {
-      ctx.drawImage(img, 4, 36, 4, 12, bodyX, legY, 4*s, legH);
-    }
+  if (isHd) {
+    const plData = ovCtx.getImageData(4, 36, 4, 12).data;
+    for (let i = 3; i < plData.length; i += 4) { if (plData[i] > 0) { ctx.drawImage(img, 4, 36, 4, 12, bodyX, legY, 4*s, legH); break; } }
   }
 
-  let rightLegSrcX = 20, rightLegSrcY = 52;
-  if (img.naturalHeight !== 64) {
-    rightLegSrcX = 4; rightLegSrcY = 20;
-  }
-  ctx.drawImage(img, rightLegSrcX, rightLegSrcY, 4, 12, bodyX + 4*s + gap, legY, 4*s, legH);
-  if (img.naturalHeight === 64) {
-    const pantsR2Data = jacketCtx.getImageData(20, 36, 4, 12).data;
-    let hasPantsR = false;
-    for (let i = 3; i < pantsR2Data.length; i += 4) { if (pantsR2Data[i] > 0) { hasPantsR = true; break; } }
-    if (hasPantsR) {
-      ctx.drawImage(img, 20, 36, 4, 12, bodyX + 4*s + gap, legY, 4*s, legH);
-    }
+  const rLegSX = isHd ? 20 : 4, rLegSY = isHd ? 52 : 20;
+  ctx.drawImage(img, rLegSX, rLegSY, 4, 12, bodyX + 4*s + gap*s, legY, 4*s, legH);
+  if (isHd) {
+    const prData = ovCtx.getImageData(20, 36, 4, 12).data;
+    for (let i = 3; i < prData.length; i += 4) { if (prData[i] > 0) { ctx.drawImage(img, 20, 36, 4, 12, bodyX + 4*s + gap*s, legY, 4*s, legH); break; } }
   }
 }
 
@@ -1592,18 +1566,32 @@ function loadSkinToPreview(skinName, base64Data) {
 
   if (!base64Data || skinName === 'default') {
     const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    const grad = ctx.createRadialGradient(W/2, H - 12, 2, W/2, H - 12, 50);
+    grad.addColorStop(0, 'rgba(0,0,0,0.45)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(W/2, H - 12, 50, 9, 0, 0, Math.PI*2);
+    ctx.fill();
+    const slim = skinModelType === 'slim';
+    const armW = slim ? 3 : 4;
+    const s = 8, gap = 1;
+    const totalW = armW*s + gap*s + 8*s + gap*s + armW*s;
+    const totalH = 8*s + gap*s + 12*s + gap*s + 12*s;
+    const sx = (W - totalW)/2, sy = (H - totalH)/2 - 6;
+    const bx = sx + armW*s + gap*s;
     ctx.fillStyle = '#4a4a6a';
-    ctx.fillRect(60, 20, 48, 48);
+    ctx.fillRect(bx, sy, 8*s, 8*s);
     ctx.fillStyle = '#5a5a7a';
-    ctx.fillRect(60, 70, 48, 72);
+    ctx.fillRect(bx, sy + 8*s + gap*s, 8*s, 12*s);
     ctx.fillStyle = '#3a3a5a';
-    const aw = skinModelType === 'slim' ? 18 : 24;
-    ctx.fillRect(60 - aw - 4, 70, aw, 72);
-    ctx.fillRect(60 + 48 + 4, 70, aw, 72);
+    ctx.fillRect(sx, sy + 8*s + gap*s, armW*s, 12*s);
+    ctx.fillRect(bx + 8*s + gap*s, sy + 8*s + gap*s, armW*s, 12*s);
     ctx.fillStyle = '#4a4a6a';
-    ctx.fillRect(60, 144, 22, 72);
-    ctx.fillRect(86, 144, 22, 72);
+    ctx.fillRect(bx, sy + 8*s + gap*s + 12*s + gap*s, 4*s, 12*s);
+    ctx.fillRect(bx + 4*s + gap*s, sy + 8*s + gap*s + 12*s + gap*s, 4*s, 12*s);
     skinPreviewImg = null;
     return;
   }
