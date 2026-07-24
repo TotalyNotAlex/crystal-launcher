@@ -41,8 +41,9 @@ class UpdateService {
         downloadUrl: res.data.assets?.[0]?.browser_download_url || '',
         body: res.data.body || '',
       };
-    } catch {
-      return { hasUpdate: false, version: CURRENT_VERSION, currentVersion: CURRENT_VERSION, url: '', downloadUrl: '', body: '' };
+    } catch (err) {
+      const msg = err?.response?.status === 403 ? 'API rate limited — try again later' : (err?.message || 'Network error');
+      return { hasUpdate: false, version: CURRENT_VERSION, currentVersion: CURRENT_VERSION, url: '', downloadUrl: '', body: '', error: msg };
     }
   }
 

@@ -1108,7 +1108,9 @@ function initSettings() {
     const status = $('update-status');
     status.textContent = 'Checking for updates...';
     const result = await window.api.checkUpdates();
-    if (result.hasUpdate) {
+    if (result.error) {
+      status.innerHTML = `<span style="color:var(--danger)">Update check failed:</span> ${result.error}`;
+    } else if (result.hasUpdate) {
       status.innerHTML = `Update ${result.version} available! <a href="${result.url}" target="_blank" style="color:var(--accent)">Download</a>`;
     } else {
       status.textContent = `Crystal Launcher is up to date (${result.currentVersion})`;
