@@ -1605,7 +1605,7 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
         const sum=e0+e1+e2;
         if(sum===0)continue;
         const u=e0/sum,v=e1/sum,w=e2/sum;
-        if(u<0||v<0||w<0)continue;
+        if(u < -0.001 || v < -0.001 || w < -0.001)continue;
 
         const tu=(u*uv[0][0]+v*uv[1][0]+(1-u-v)*uv[2][0])/64;
         const tv=(u*uv[0][1]+v*uv[1][1]+(1-u-v)*uv[2][1])/64;
@@ -1624,13 +1624,13 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
 
 function startSkinViewer(canvas, img, modelType) {
   stopSkinViewer();
-  sv={canvas,ctx:canvas.getContext('2d'),img,yaw:0.5,pitch:-0.2,slim:modelType==='slim',dragging:false,lx:0,ly:0,autoRotate:true};
+  sv={canvas,ctx:canvas.getContext('2d'),img,yaw:0.4,pitch:-0.15,slim:modelType==='slim',dragging:false,lx:0,ly:0};
   sv.ctx.imageSmoothingEnabled=false;
 
   function pt(e){return e.touches?{x:e.touches[0].clientX,y:e.touches[0].clientY}:{x:e.clientX,y:e.clientY}}
   function onDown(e) {
     const r=canvas.getBoundingClientRect();
-    sv.dragging=true;sv.autoRotate=false;
+    sv.dragging=true;
     sv.lx=pt(e).x-r.left;sv.ly=pt(e).y-r.top;
   }
   function onMove(e) {
@@ -1641,7 +1641,7 @@ function startSkinViewer(canvas, img, modelType) {
     sv.pitch=Math.max(-1.2,Math.min(1.2,sv.pitch));
     sv.lx=c.x;sv.ly=c.y;
   }
-  function onUp() {sv.dragging=false;setTimeout(()=>sv.autoRotate=true,3000);}
+  function onUp() {sv.dragging=false;}
 
   canvas.addEventListener('mousedown',onDown);
   window.addEventListener('mousemove',onMove);
@@ -1652,7 +1652,6 @@ function startSkinViewer(canvas, img, modelType) {
 
   function frame() {
     if (!sv) return;
-    if (sv.autoRotate) { sv.yaw += 0.006; }
     renderSkin3D(sv.ctx, canvas.width, canvas.height, sv.img, sv.yaw, sv.pitch, sv.slim);
     svAnimId = requestAnimationFrame(frame);
   }
