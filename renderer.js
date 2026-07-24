@@ -1578,14 +1578,14 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
 
   const out=ctx.getImageData(0,0,W,H);
   const pix=out.data;
-  const fov=60, camZ=80;
+  const fov=130, camZ=28, yOff=56;
   function edgeX(p1,p2,y){const dy=p2.y-p1.y;return Math.abs(dy)<0.001?p1.x:p1.x+(y-p1.y)*(p2.x-p1.x)/dy}
   function edgeFrac(p1,p2,y){const dy=p2.y-p1.y;return Math.abs(dy)<0.001?0.5:(y-p1.y)/dy}
 
   function rasterTri(t){
     const sp=t.v.map(v=>{
       const z=v.z+camZ;if(z<1)return null;
-      return {x:v.x*fov/z+W/2,y:-v.y*fov/z+H/2}
+      return {x:v.x*fov/z+W/2,y:-v.y*fov/z+H/2+yOff}
     });
     if(!sp[0]||!sp[1]||!sp[2])return;
     const uv=t.uv,o=[0,1,2];o.sort((a,b)=>sp[a].y-sp[b].y);
@@ -1642,7 +1642,7 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
 
 function startSkinViewer(canvas, img, modelType) {
   stopSkinViewer();
-  sv={canvas,ctx:canvas.getContext('2d'),img,yaw:0.6,pitch:-0.3,slim:modelType==='slim',dragging:false,lx:0,ly:0,autoRotate:true};
+  sv={canvas,ctx:canvas.getContext('2d'),img,yaw:0.5,pitch:-0.2,slim:modelType==='slim',dragging:false,lx:0,ly:0,autoRotate:true};
   sv.ctx.imageSmoothingEnabled=false;
 
   function onDown(e) {
@@ -1671,7 +1671,7 @@ function startSkinViewer(canvas, img, modelType) {
 
   function frame() {
     if (!sv) return;
-    if (sv.autoRotate) { sv.yaw += 0.008; }
+    if (sv.autoRotate) { sv.yaw += 0.006; }
     renderSkin3D(sv.ctx, canvas.width, canvas.height, sv.img, sv.yaw, sv.pitch, sv.slim);
     svAnimId = requestAnimationFrame(frame);
   }
