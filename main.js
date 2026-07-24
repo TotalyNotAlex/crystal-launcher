@@ -159,7 +159,7 @@ app.whenReady().then(() => {
     } catch {}
   }
   setTimeout(checkUpdate, 5000);
-  setInterval(checkUpdate, 30000);
+  setInterval(checkUpdate, 300000);
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.exit(0); });
