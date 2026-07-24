@@ -749,7 +749,6 @@ async function updateNews() {
       const date = e.date ? new Date(e.date).toLocaleDateString() : '';
       const version = e.version || '';
       const imgUrl = e.image?.url ? `${newsBase}${e.image.url}` : (typeof e.image === 'string' ? `${newsBase}${e.image}` : '');
-      const linkUrl = e.contentPath ? `${newsBase}/${e.contentPath.replace(/^\//, '')}` : '';
       const versionTag = version ? `<span class="news-version">${version}</span>` : '';
       const imgHtml = imgUrl
         ? `<img class="news-image" src="${imgUrl}" alt="" onerror="this.style.display='none'">`
@@ -761,10 +760,7 @@ async function updateNews() {
           <div class="news-date"><span>${date}</span>${versionTag}</div>
           <div class="news-text">${text.substring(0, 200)}${text.length > 200 ? '...' : ''}</div>
         </div>
-        ${linkUrl ? `<button class="btn btn-secondary news-read-btn" data-link="${linkUrl}">${t('news.read')}</button>` : ''}
       `;
-      const btn = card.querySelector('.news-read-btn');
-      if (btn) btn.onclick = () => window.api.shell.openExternal(btn.dataset.link);
       list.appendChild(card);
     });
   } catch (e) {
