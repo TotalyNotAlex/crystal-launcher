@@ -1477,86 +1477,215 @@ async function init() {
 let currentSkins = [];
 let activeSkinName = 'default';
 let skinModelType = 'slim';
-let skinPreviewImg = null;
 
-function renderCharacterOnCanvas(canvas, img, modelType) {
-  if (!canvas || !img) return;
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width;
-  const H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
+// === 3D Skin Viewer (pure Canvas, NameMC-style) ===
+let sv = null; // skin viewer state
+let svAnimId = null;
 
-  const grad = ctx.createRadialGradient(W/2, H - 12, 2, W/2, H - 12, 50);
-  grad.addColorStop(0, 'rgba(0,0,0,0.45)');
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.ellipse(W/2, H - 12, 50, 9, 0, 0, Math.PI*2);
-  ctx.fill();
+const UV = {
+  head:  {f:[8,8,8,8],b:[24,8,8,8],l:[0,8,8,8],r:[16,8,8,8],t:[8,0,8,8],m:[16,0,8,8]},
+  hat:   {f:[40,8,8,8],b:[56,8,8,8],l:[32,8,8,8],r:[48,8,8,8],t:[40,0,8,8],m:[48,0,8,8]},
+  body:  {f:[20,20,8,12],b:[32,20,8,12],l:[16,20,4,12],r:[28,20,4,12],t:[20,16,8,4],m:[28,16,8,4]},
+  jack:  {f:[20,52,8,12],b:[32,52,8,12],l:[16,52,4,12],r:[28,52,4,12],t:[20,48,8,4],m:[28,48,8,4]},
+  lleg:  {f:[4,20,4,12],b:[20,52,4,12],l:[0,20,4,12],r:[8,20,4,12],t:[4,16,4,4],m:[8,16,4,4]},
+  rleg:  {f:[4,20,4,12],b:[20,52,4,12],l:[0,20,4,12],r:[8,20,4,12],t:[4,16,4,4],m:[8,16,4,4]},
+  llo:   {f:[4,36,4,12],b:[20,36,4,12],l:[0,36,4,12],r:[8,36,4,12],t:[4,32,4,4],m:[8,32,4,4]},
+  rlo:   {f:[4,36,4,12],b:[20,36,4,12],l:[0,36,4,12],r:[8,36,4,12],t:[4,32,4,4],m:[8,32,4,4]}
+};
 
-  const slim = modelType === 'slim';
-  const armW = slim ? 3 : 4;
-  const s = 8;
-  const gap = 1;
-  const headS = 8 * s;
-  const bodyW = 8 * s;
-  const bodyH = 12 * s;
-  const legH = 12 * s;
-  const armWpx = armW * s;
+function armUV(w) { return {f:[44,20,w,12],b:[52,20,w,12],l:[40,20,w,12],r:[48,20,w,12],t:[44,16,w,4],m:[48,16,w,4]}; }
+function armOV(w) { return {f:[44,52,w,12],b:[52,52,w,12],l:[40,52,w,12],r:[48,52,w,12],t:[44,48,w,4],m:[48,48,w,4]}; }
 
-  const totalW = armWpx + gap*s + bodyW + gap*s + armWpx;
-  const totalH = headS + gap*s + bodyH + gap*s + legH;
-  const startX = (W - totalW) / 2;
-  const startY = (H - totalH) / 2 - 6;
+function v3(x,y,z){return{x,y,z}}
+function m3(a11,a12,a13,a21,a22,a23,a31,a32,a33){return[a11,a12,a13,a21,a22,a23,a31,a32,a33]}
+function mxv(m,v){return v3(m[0]*v.x+m[1]*v.y+m[2]*v.z,m[3]*v.x+m[4]*v.y+m[5]*v.z,m[6]*v.x+m[7]*v.y+m[8]*v.z)}
+function rotY(a){let c=Math.cos(a),s=Math.sin(a);return m3(c,0,s,0,1,0,-s,0,c)}
+function rotX(a){let c=Math.cos(a),s=Math.sin(a);return m3(1,0,0,0,c,-s,0,s,c)}
 
-  const leftArmX = startX;
-  const bodyX = startX + armWpx + gap*s;
-  const rightArmX = bodyX + bodyW + gap*s;
-  const headY = startY;
-  const torsoY = headY + headS + gap*s;
-  const legY = torsoY + bodyH + gap*s;
+function proj(v,w,h){let d=60,z=v.z+80;if(z<1)z=1;return{x:v.x*d/z+w/2,y:-v.y*d/z+h/2,z}}
 
-  const ovC = document.createElement('canvas');
-  ovC.width = 64; ovC.height = 64;
-  const ovCtx = ovC.getContext('2d');
-  ovCtx.drawImage(img, 0, 0);
-  const isHd = img.naturalHeight === 64;
-
-  ctx.drawImage(img, 8, 8, 8, 8, bodyX, headY, 8*s, 8*s);
-  const hatData = ovCtx.getImageData(40, 8, 8, 8).data;
-  for (let i = 3; i < hatData.length; i += 4) { if (hatData[i] > 0) { ctx.drawImage(img, 40, 8, 8, 8, bodyX, headY, 8*s, 8*s); break; } }
-
-  ctx.drawImage(img, 20, 20, 8, 12, bodyX, torsoY, 8*s, bodyH);
-  if (isHd) {
-    const jData = ovCtx.getImageData(20, 52, 8, 12).data;
-    for (let i = 3; i < jData.length; i += 4) { if (jData[i] > 0) { ctx.drawImage(img, 20, 52, 8, 12, bodyX, torsoY, 8*s, bodyH); break; } }
+function buildFaces(parts, texData, isHd) {
+  let faces = [];
+  for (const p of parts) {
+    const [cx,cy,cz] = p[0]; const [w,h,d] = p[1]; const u = p[2]; const ov = p[3];
+    const hw=w/2, hh=h/2, hd=d/2;
+    const side = {f:[0,1,2,3],b:[6,5,4,7],l:[4,5,1,0],r:[7,6,2,3],t:[3,2,6,7],m:[0,4,7,3]};
+    const vts = [
+      v3(cx-hw,cy+hh,cz+hd),v3(cx+hw,cy+hh,cz+hd),v3(cx+hw,cy-hh,cz+hd),v3(cx-hw,cy-hh,cz+hd),
+      v3(cx-hw,cy+hh,cz-hd),v3(cx+hw,cy+hh,cz-hd),v3(cx+hw,cy-hh,cz-hd),v3(cx-hw,cy-hh,cz-hd)
+    ];
+    function addFace(vIdx,uv) {
+      const [ux,uy,uw,uh]=uv; const f=vIdx.map(i=>vts[i]);
+      const uvc=[[ux,uy],[ux+uw,uy],[ux+uw,uy+uh],[ux,uy+uh]];
+      faces.push({v:f,uv:uvc,tex:texData,depth:0});
+    }
+    for (const [k,vi] of Object.entries(side)) {
+      if (u[k]) addFace(vi,u[k]);
+      if (isHd && ov && ov[k]) {
+        const [ox,oy,ow,oh]=ov[k];
+        let hasAlpha=false;
+        for(let row=0;row<oh&&!hasAlpha;row++){for(let col=0;col<ow;col++){
+          const idx=((oy+row)*64+(ox+col))*4;
+          if(texData[idx+3]>0){hasAlpha=true;break}
+        }}
+        if(hasAlpha) addFace(vi,ov[k]);
+      }
+    }
   }
+  return faces;
+}
 
-  ctx.drawImage(img, 44, 20, armW, 12, leftArmX, torsoY, armW*s, bodyH);
-  if (isHd) {
-    const slData = ovCtx.getImageData(44, 52, armW, 12).data;
-    for (let i = 3; i < slData.length; i += 4) { if (slData[i] > 0) { ctx.drawImage(img, 44, 52, armW, 12, leftArmX, torsoY, armW*s, bodyH); break; } }
-  }
+function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
+  ctx.clearRect(0,0,W,H);
+  const grad=ctx.createRadialGradient(W/2,H-12,2,W/2,H-12,55);
+  grad.addColorStop(0,'rgba(0,0,0,0.5)');grad.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=grad;ctx.beginPath();ctx.ellipse(W/2,H-8,55,10,0,0,Math.PI*2);ctx.fill();
 
-  const rArmSX = isHd ? 36 : 44, rArmSY = isHd ? 52 : 20;
-  ctx.drawImage(img, rArmSX, rArmSY, armW, 12, rightArmX, torsoY, armW*s, bodyH);
-  if (isHd) {
-    const srData = ovCtx.getImageData(52, 52, armW, 12).data;
-    for (let i = 3; i < srData.length; i += 4) { if (srData[i] > 0) { ctx.drawImage(img, 52, 52, armW, 12, rightArmX, torsoY, armW*s, bodyH); break; } }
-  }
+  const tw=img.naturalWidth, th=img.naturalHeight;
+  const texC=document.createElement('canvas');
+  texC.width=tw;texC.height=th;
+  const tCtx=texC.getContext('2d');
+  tCtx.drawImage(img,0,0);
+  const texPixels=tCtx.getImageData(0,0,tw,th).data;
 
-  ctx.drawImage(img, 4, 20, 4, 12, bodyX, legY, 4*s, legH);
-  if (isHd) {
-    const plData = ovCtx.getImageData(4, 36, 4, 12).data;
-    for (let i = 3; i < plData.length; i += 4) { if (plData[i] > 0) { ctx.drawImage(img, 4, 36, 4, 12, bodyX, legY, 4*s, legH); break; } }
-  }
+  const w=slim?3:4, isHd=th===64;
+  const rUV=armUV(w), rOV=armOV(w);
+  const rArmBase=isHd?{f:[36,52,w,12],b:[36,52,w,12],l:[36,52,w,12],r:[36,52,w,12],t:[36,48,w,4],m:[40,48,w,4]}:rUV;
+  const rLegBase=isHd?{f:[20,52,4,12],b:[20,52,4,12],l:[20,52,4,12],r:[20,52,4,12],t:[20,48,4,4],m:[24,48,4,4]}:UV.lleg;
+  const rLegOV=isHd?{f:[20,36,4,12],b:[20,36,4,12],l:[20,36,4,12],r:[20,36,4,12],t:[20,32,4,4],m:[24,32,4,4]}:null;
+  const rArmOV2=isHd?{f:[52,52,w,12],b:[52,52,w,12],l:[52,52,w,12],r:[52,52,w,12],t:[52,48,w,4],m:[52,48,w,4]}:null;
 
-  const rLegSX = isHd ? 20 : 4, rLegSY = isHd ? 52 : 20;
-  ctx.drawImage(img, rLegSX, rLegSY, 4, 12, bodyX + 4*s + gap*s, legY, 4*s, legH);
-  if (isHd) {
-    const prData = ovCtx.getImageData(20, 36, 4, 12).data;
-    for (let i = 3; i < prData.length; i += 4) { if (prData[i] > 0) { ctx.drawImage(img, 20, 36, 4, 12, bodyX + 4*s + gap*s, legY, 4*s, legH); break; } }
+  const parts=[
+    [[0,28,0],[8,8,8],UV.head,UV.hat],
+    [[0,18,0],[8,12,4],UV.body,UV.jack],
+    [[-(slim?5.5:6),18,0],[w,12,4],rUV,rOV],
+    [[slim?5.5:6,18,0],[w,12,4],rArmBase,rArmOV2],
+    [[-2,6,0],[4,12,4],UV.lleg,UV.llo],
+    [[2,6,0],[4,12,4],rLegBase,rLegOV]
+  ];
+
+  let faces=buildFaces(parts,texPixels,isHd);
+  const my=rotY(yaw), mx=rotX(pitch);
+  for (const f of faces) {
+    for(let i=0;i<4;i++){f.v[i]=mxv(my,mxv(mx,f.v[i]));const p=proj(f.v[i],W,H);f.v[i]=p}
+    let d=0;for(let i=0;i<4;i++)d+=f.v[i].z;f.depth=d/4;
   }
+  faces.sort((a,b)=>b.depth-a.depth);
+
+  const out=ctx.getImageData(0,0,W,H);
+  const pix=out.data;
+
+  for (const f of faces) {
+    const v=f.v, uv=f.uv;
+    const vs=v.map(p=>({x:p.x,y:p.y}));
+    const minY=Math.max(0,Math.ceil(Math.min(vs[0].y,vs[1].y,vs[2].y,vs[3].y)));
+    const maxY=Math.min(H-1,Math.floor(Math.max(vs[0].y,vs[1].y,vs[2].y,vs[3].y)));
+    if (minY>=maxY||maxY<0||minY>=H) continue;
+
+    const uvX=[uv[0][0]/64,uv[1][0]/64,uv[2][0]/64,uv[3][0]/64];
+    const uvY=[uv[0][1]/64,uv[1][1]/64,uv[2][1]/64,uv[3][1]/64];
+
+    const order=[0,1,2,3];
+    order.sort((a,b)=>vs[a].y-vs[b].y);
+    const o=order;
+
+    function edgeX(a,b,y){
+      const dy=vs[b].y-vs[a].y;
+      if(Math.abs(dy)<0.001)return vs[a].x;
+      return vs[a].x+(y-vs[a].y)*(vs[b].x-vs[a].x)/dy;
+    }
+    function lerpU(a,b,t){return uvX[a]+(uvX[b]-uvX[a])*t}
+    function lerpV(a,b,t){return uvY[a]+(uvY[b]-uvY[a])*t}
+    function edgeFrac(a,b,y){
+      const dy=vs[b].y-vs[a].y;
+      if(Math.abs(dy)<0.001)return 0.5;
+      return (y-vs[a].y)/dy;
+    }
+
+    for (let py=minY;py<=maxY;py++) {
+      let xl,xr,ul,ur,vl,vr;
+      const t0=vs[o[0]].y===vs[o[1]].y?1:edgeFrac(o[0],o[1],py);
+      const t1=vs[o[0]].y===vs[o[2]].y?1:edgeFrac(o[0],o[2],py);
+
+      if (py<vs[o[1]].y) {
+        xl=edgeX(o[0],o[1],py);xr=edgeX(o[0],o[2],py);
+        ul=lerpU(o[0],o[1],t0);ur=lerpU(o[0],o[2],t1);
+        vl=lerpV(o[0],o[1],t0);vr=lerpV(o[0],o[2],t1);
+      } else {
+        xl=edgeX(o[1],o[2],py);xr=edgeX(o[0],o[2],py);
+        const t2=vs[o[1]].y===vs[o[2]].y?1:edgeFrac(o[1],o[2],py);
+        ul=lerpU(o[1],o[2],t2);ur=lerpU(o[0],o[2],t1);
+        vl=lerpV(o[1],o[2],t2);vr=lerpV(o[0],o[2],t1);
+      }
+      if(xl>xr){const tmp=xl;xl=xr;xr=tmp;const tu=ul;ul=ur;ur=tu;const tv=vl;vl=vr;vr=tv}
+      const sl=Math.max(0,Math.ceil(xl)), sr=Math.min(W-1,Math.floor(xr));
+      if(sl>sr)continue;
+      for (let px=sl;px<=sr;px++) {
+        const frac=xr===xl?0.5:(px-xl)/(xr-xl);
+        const tu=ul+(ur-ul)*frac, tv=vl+(vr-vl)*frac;
+        const sx=Math.min(tw-1,Math.max(0,Math.round(tu*tw)));
+        const sy=Math.min(th-1,Math.max(0,Math.round(tv*th)));
+        const idx=(sy*tw+sx)*4;
+        if(texPixels[idx+3]>128){
+          const di=(py*W+px)*4;
+          pix[di]=texPixels[idx];pix[di+1]=texPixels[idx+1];pix[di+2]=texPixels[idx+2];pix[di+3]=255;
+        }
+      }
+    }
+  }
+  ctx.putImageData(out,0,0);
+}
+
+function startSkinViewer(canvas, img, modelType) {
+  stopSkinViewer();
+  sv={canvas,ctx:canvas.getContext('2d'),img,yaw:0.6,pitch:-0.3,slim:modelType==='slim',dragging:false,lx:0,ly:0,autoRotate:true};
+  sv.ctx.imageSmoothingEnabled=false;
+
+  function onDown(e) {
+    const r=canvas.getBoundingClientRect();
+    sv.dragging=true;sv.autoRotate=false;
+    sv.lx=(e.clientX||e.touches[0].clientX)-r.left;
+    sv.ly=(e.clientY||e.touches[0].clientY)-r.top;
+  }
+  function onMove(e) {
+    if(!sv.dragging)return;e.preventDefault();
+    const r=canvas.getBoundingClientRect();
+    const cx=(e.clientX||e.touches[0].clientX)-r.left;
+    const cy=(e.clientY||e.touches[0].clientY)-r.top;
+    sv.yaw+=(cx-sv.lx)*0.01;sv.pitch+=(cy-sv.ly)*0.01;
+    sv.pitch=Math.max(-1.2,Math.min(1.2,sv.pitch));
+    sv.lx=cx;sv.ly=cy;
+  }
+  function onUp() {sv.dragging=false;setTimeout(()=>sv.autoRotate=true,3000);}
+
+  canvas.addEventListener('mousedown',onDown);
+  window.addEventListener('mousemove',onMove);
+  window.addEventListener('mouseup',onUp);
+  canvas.addEventListener('touchstart',onDown,{passive:true});
+  window.addEventListener('touchmove',onMove,{passive:false});
+  window.addEventListener('touchend',onUp);
+
+  function frame() {
+    if (!sv) return;
+    if (sv.autoRotate) { sv.yaw += 0.008; }
+    renderSkin3D(sv.ctx, canvas.width, canvas.height, sv.img, sv.yaw, sv.pitch, sv.slim);
+    svAnimId = requestAnimationFrame(frame);
+  }
+  frame();
+
+  sv._cleanup=()=>{
+    canvas.removeEventListener('mousedown',onDown);
+    window.removeEventListener('mousemove',onMove);
+    window.removeEventListener('mouseup',onUp);
+    canvas.removeEventListener('touchstart',onDown);
+    window.removeEventListener('touchmove',onMove);
+    window.removeEventListener('touchend',onUp);
+  };
+}
+
+function stopSkinViewer() {
+  if (svAnimId) { cancelAnimationFrame(svAnimId); svAnimId = null; }
+  if (sv) { if (sv._cleanup) sv._cleanup(); sv = null; }
 }
 
 function loadSkinToPreview(skinName, base64Data) {
@@ -1565,41 +1694,27 @@ function loadSkinToPreview(skinName, base64Data) {
   $('skin-current-name').textContent = skinName === 'default' ? 'Default' : skinName;
 
   if (!base64Data || skinName === 'default') {
+    stopSkinViewer();
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
-    const grad = ctx.createRadialGradient(W/2, H - 12, 2, W/2, H - 12, 50);
-    grad.addColorStop(0, 'rgba(0,0,0,0.45)');
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.ellipse(W/2, H - 12, 50, 9, 0, 0, Math.PI*2);
-    ctx.fill();
+    const grad = ctx.createRadialGradient(W/2, H - 12, 2, W/2, H - 12, 55);
+    grad.addColorStop(0, 'rgba(0,0,0,0.5)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.ellipse(W/2, H - 8, 55, 10, 0, 0, Math.PI*2); ctx.fill();
     const slim = skinModelType === 'slim';
-    const armW = slim ? 3 : 4;
-    const s = 8, gap = 1;
-    const totalW = armW*s + gap*s + 8*s + gap*s + armW*s;
-    const totalH = 8*s + gap*s + 12*s + gap*s + 12*s;
-    const sx = (W - totalW)/2, sy = (H - totalH)/2 - 6;
-    const bx = sx + armW*s + gap*s;
-    ctx.fillStyle = '#4a4a6a';
-    ctx.fillRect(bx, sy, 8*s, 8*s);
-    ctx.fillStyle = '#5a5a7a';
-    ctx.fillRect(bx, sy + 8*s + gap*s, 8*s, 12*s);
-    ctx.fillStyle = '#3a3a5a';
-    ctx.fillRect(sx, sy + 8*s + gap*s, armW*s, 12*s);
-    ctx.fillRect(bx + 8*s + gap*s, sy + 8*s + gap*s, armW*s, 12*s);
-    ctx.fillStyle = '#4a4a6a';
-    ctx.fillRect(bx, sy + 8*s + gap*s + 12*s + gap*s, 4*s, 12*s);
-    ctx.fillRect(bx + 4*s + gap*s, sy + 8*s + gap*s + 12*s + gap*s, 4*s, 12*s);
-    skinPreviewImg = null;
+    const w = slim ? 3 : 4, s = 8;
+    const ax = (W - (w*s + 8 + 8*s + 8 + w*s))/2, ay = (H - (64 + 8 + 96 + 8 + 96))/2 - 8;
+    const bx = ax + w*s + 8;
+    ctx.fillStyle = '#4a4a6a'; ctx.fillRect(bx, ay, 8*s, 8*s);
+    ctx.fillStyle = '#5a5a7a'; ctx.fillRect(bx, ay + 8*s + 8, 8*s, 12*s);
+    ctx.fillStyle = '#3a3a5a'; ctx.fillRect(ax, ay + 8*s + 8, w*s, 12*s); ctx.fillRect(bx + 8*s + 8, ay + 8*s + 8, w*s, 12*s);
+    ctx.fillStyle = '#4a4a6a'; ctx.fillRect(bx, ay + 8*s + 8 + 12*s + 8, 4*s, 12*s); ctx.fillRect(bx + 4*s + 8, ay + 8*s + 8 + 12*s + 8, 4*s, 12*s);
     return;
   }
 
   const img = new Image();
   img.onload = () => {
-    skinPreviewImg = img;
-    renderCharacterOnCanvas(canvas, img, skinModelType);
+    startSkinViewer(canvas, img, skinModelType);
   };
   img.src = 'data:image/png;base64,' + base64Data;
 }
@@ -1718,21 +1833,15 @@ $('skin-model-classic').onclick = () => {
   skinModelType = 'classic';
   document.querySelectorAll('.model-btn').forEach((b) => b.classList.remove('active'));
   $('skin-model-classic').classList.add('active');
-  if (skinPreviewImg) {
-    renderCharacterOnCanvas($('skin-preview-canvas'), skinPreviewImg, skinModelType);
-  } else {
-    loadSkinToPreview(activeSkinName, null);
-  }
+  if (sv && sv.img) { startSkinViewer($('skin-preview-canvas'), sv.img, skinModelType); }
+  else { loadSkinToPreview(activeSkinName, null); }
 };
 $('skin-model-slim').onclick = () => {
   skinModelType = 'slim';
   document.querySelectorAll('.model-btn').forEach((b) => b.classList.remove('active'));
   $('skin-model-slim').classList.add('active');
-  if (skinPreviewImg) {
-    renderCharacterOnCanvas($('skin-preview-canvas'), skinPreviewImg, skinModelType);
-  } else {
-    loadSkinToPreview(activeSkinName, null);
-  }
+  if (sv && sv.img) { startSkinViewer($('skin-preview-canvas'), sv.img, skinModelType); }
+  else { loadSkinToPreview(activeSkinName, null); }
 };
 
 $('skin-namemc-btn').onclick = async () => {
