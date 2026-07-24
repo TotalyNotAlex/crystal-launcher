@@ -1541,9 +1541,9 @@ function buildFaces(parts, texPixels, isHd) {
 
 function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
   ctx.clearRect(0,0,W,H);
-  const grad=ctx.createRadialGradient(W/2,H-12,2,W/2,H-12,55);
+  const grad=ctx.createRadialGradient(W/2,200,2,W/2,200,55);
   grad.addColorStop(0,'rgba(0,0,0,0.5)');grad.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=grad;ctx.beginPath();ctx.ellipse(W/2,H-8,55,10,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=grad;ctx.beginPath();ctx.ellipse(W/2,204,55,10,0,0,Math.PI*2);ctx.fill();
 
   const tw=img.naturalWidth, th=img.naturalHeight;
   const texC=document.createElement('canvas');
@@ -1555,7 +1555,8 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
   const w=slim?3:4, isHd=th===64;
   const rU=armUV(w), rO=armOV(w);
   const rAB=isHd?{f:[36,52,w,12],b:[36,52,w,12],l:[36,52,w,12],r:[36,52,w,12],t:[36,48,w,4],m:[40,48,w,4]}:rU;
-  const rLB=isHd?{f:[20,52,4,12],b:[20,52,4,12],l:[20,52,4,12],r:[20,52,4,12],t:[20,48,4,4],m:[24,48,4,4]}:UV.lleg;
+  const rLB=isHd?{f:[20,52,4,12],b:[20,52,4,12],l:[20,52,4,12],r:[20,52,4,12],t:[20,48,4,4],m:[24,48,4,4]}:{f:[4,20,4,12],b:[4,20,4,12],l:[4,20,4,12],r:[4,20,4,12],t:[4,16,4,4],m:[8,16,4,4]};
+  const lL32={f:[4,20,4,12],b:[4,20,4,12],l:[4,20,4,12],r:[4,20,4,12],t:[4,16,4,4],m:[8,16,4,4]};
   const rLO=isHd?{f:[20,36,4,12],b:[20,36,4,12],l:[20,36,4,12],r:[20,36,4,12],t:[20,32,4,4],m:[24,32,4,4]}:null;
   const rAO=isHd?{f:[52,52,w,12],b:[52,52,w,12],l:[52,52,w,12],r:[52,52,w,12],t:[52,48,w,4],m:[52,48,w,4]}:null;
 
@@ -1564,8 +1565,8 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
     [[0,18,0],[8,12,4],UV.body,UV.jack],
     [[-(slim?5.5:6),18,0],[w,12,4],rU,rO],
     [[slim?5.5:6,18,0],[w,12,4],rAB,rAO],
-    [[-2,6,0],[4,12,4],UV.lleg,UV.llo],
-    [[2,6,0],[4,12,4],rLB,rLO]
+    [[-2,6,0],[4,12,4],isHd?UV.lleg:lL32,isHd?UV.llo:null],
+    [[2,6,0],[4,12,4],rLB,isHd?rLO:null]
   ];
 
   let tris=buildFaces(parts,texPixels,isHd);
@@ -1591,7 +1592,7 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
     const uv=t.uv,o=[0,1,2];o.sort((a,b)=>sp[a].y-sp[b].y);
     const a=sp[o[0]],b=sp[o[1]],c=sp[o[2]];
     if(a.y>=c.y)return;
-    const minY=Math.max(0,Math.ceil(a.y)),maxY=Math.min(H-1,Math.floor(c.y));
+    const minY=Math.max(0,Math.floor(a.y)),maxY=Math.min(H-1,Math.ceil(c.y));
     if(minY>=maxY)return;
 
     function iU(i,j,t){return uv[i][0]/64+(uv[j][0]/64-uv[i][0]/64)*t}
@@ -1620,7 +1621,7 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
       if(x1>x2){
         let t=x1;x1=x2;x2=t;t=u1;u1=u2;u2=t;t=v1;v1=v2;v2=t
       }
-      const sl=Math.max(0,Math.ceil(x1)),sr=Math.min(W-1,Math.floor(x2));
+      const sl=Math.max(0,Math.floor(x1)),sr=Math.min(W-1,Math.ceil(x2));
       if(sl>sr)continue;
       for(let px=sl;px<=sr;px++){
         const fr=x2===x1?0.5:(px-x1)/(x2-x1);
@@ -1645,20 +1646,19 @@ function startSkinViewer(canvas, img, modelType) {
   sv={canvas,ctx:canvas.getContext('2d'),img,yaw:0.5,pitch:-0.2,slim:modelType==='slim',dragging:false,lx:0,ly:0,autoRotate:true};
   sv.ctx.imageSmoothingEnabled=false;
 
+  function pt(e){return e.touches?{x:e.touches[0].clientX,y:e.touches[0].clientY}:{x:e.clientX,y:e.clientY}}
   function onDown(e) {
     const r=canvas.getBoundingClientRect();
     sv.dragging=true;sv.autoRotate=false;
-    sv.lx=(e.clientX||e.touches[0].clientX)-r.left;
-    sv.ly=(e.clientY||e.touches[0].clientY)-r.top;
+    sv.lx=pt(e).x-r.left;sv.ly=pt(e).y-r.top;
   }
   function onMove(e) {
     if(!sv.dragging)return;e.preventDefault();
     const r=canvas.getBoundingClientRect();
-    const cx=(e.clientX||e.touches[0].clientX)-r.left;
-    const cy=(e.clientY||e.touches[0].clientY)-r.top;
-    sv.yaw+=(cx-sv.lx)*0.01;sv.pitch+=(cy-sv.ly)*0.01;
+    const c=pt(e);
+    sv.yaw+=(c.x-sv.lx)*0.02;sv.pitch-=(c.y-sv.ly)*0.02;
     sv.pitch=Math.max(-1.2,Math.min(1.2,sv.pitch));
-    sv.lx=cx;sv.ly=cy;
+    sv.lx=c.x;sv.ly=c.y;
   }
   function onUp() {sv.dragging=false;setTimeout(()=>sv.autoRotate=true,3000);}
 
@@ -1704,9 +1704,9 @@ function loadSkinToPreview(skinName, base64Data) {
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
-    const grad = ctx.createRadialGradient(W/2, H - 12, 2, W/2, H - 12, 55);
+    const grad = ctx.createRadialGradient(W/2, 200, 2, W/2, 200, 55);
     grad.addColorStop(0, 'rgba(0,0,0,0.5)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grad; ctx.beginPath(); ctx.ellipse(W/2, H - 8, 55, 10, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.ellipse(W/2, 204, 55, 10, 0, 0, Math.PI*2); ctx.fill();
     const slim = skinModelType === 'slim';
     const w = slim ? 3 : 4, s = 8;
     const ax = (W - (w*s + 8 + 8*s + 8 + w*s))/2, ay = (H - (64 + 8 + 96 + 8 + 96))/2 - 8;
