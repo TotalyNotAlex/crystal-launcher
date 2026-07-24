@@ -1546,17 +1546,15 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
   ctx.fillStyle=grad;ctx.beginPath();ctx.ellipse(W/2,204,55,10,0,0,Math.PI*2);ctx.fill();
 
   const tw=img.naturalWidth, th=img.naturalHeight;
-  const texC=document.createElement('canvas');
-  texC.width=tw;texC.height=th;
-  const tCtx=texC.getContext('2d');
-  tCtx.drawImage(img,0,0);
+  const isHd=th===64;
+  const texC=document.createElement('canvas');texC.width=tw;texC.height=th;
+  const tCtx=texC.getContext('2d');tCtx.drawImage(img,0,0);
   const texPixels=tCtx.getImageData(0,0,tw,th).data;
 
-  const w=slim?3:4, isHd=th===64;
-  const rU=armUV(w), rO=armOV(w);
+  const w=slim?3:4, rU=armUV(w), rO=armOV(w);
   const rAB=isHd?{f:[36,52,w,12],b:[36,52,w,12],l:[36,52,w,12],r:[36,52,w,12],t:[36,48,w,4],m:[40,48,w,4]}:rU;
-  const rLB=isHd?{f:[20,52,4,12],b:[20,52,4,12],l:[20,52,4,12],r:[20,52,4,12],t:[20,48,4,4],m:[24,48,4,4]}:{f:[4,20,4,12],b:[4,20,4,12],l:[4,20,4,12],r:[4,20,4,12],t:[4,16,4,4],m:[8,16,4,4]};
-  const lL32={f:[4,20,4,12],b:[4,20,4,12],l:[4,20,4,12],r:[4,20,4,12],t:[4,16,4,4],m:[8,16,4,4]};
+  const leg32={f:[4,20,4,12],b:[4,20,4,12],l:[4,20,4,12],r:[4,20,4,12],t:[4,16,4,4],m:[8,16,4,4]};
+  const rLB=isHd?{f:[20,52,4,12],b:[20,52,4,12],l:[20,52,4,12],r:[20,52,4,12],t:[20,48,4,4],m:[24,48,4,4]}:leg32;
   const rLO=isHd?{f:[20,36,4,12],b:[20,36,4,12],l:[20,36,4,12],r:[20,36,4,12],t:[20,32,4,4],m:[24,32,4,4]}:null;
   const rAO=isHd?{f:[52,52,w,12],b:[52,52,w,12],l:[52,52,w,12],r:[52,52,w,12],t:[52,48,w,4],m:[52,48,w,4]}:null;
 
@@ -1565,13 +1563,13 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
     [[0,18,0],[8,12,4],UV.body,UV.jack],
     [[-(slim?5.5:6),18,0],[w,12,4],rU,rO],
     [[slim?5.5:6,18,0],[w,12,4],rAB,rAO],
-    [[-2,6,0],[4,12,4],isHd?UV.lleg:lL32,isHd?UV.llo:null],
+    [[-2,6,0],[4,12,4],isHd?UV.lleg:leg32,isHd?UV.llo:null],
     [[2,6,0],[4,12,4],rLB,isHd?rLO:null]
   ];
 
   let tris=buildFaces(parts,texPixels,isHd);
   const my=rotY(yaw),mx=rotX(pitch);
-  for (const t of tris){
+  for(const t of tris){
     for(let i=0;i<3;i++){t.v[i]=mxv(my,mxv(mx,t.v[i]));t.depth+=t.v[i].z}
     t.depth/=3;
   }
@@ -1579,53 +1577,38 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
 
   const out=ctx.getImageData(0,0,W,H);
   const pix=out.data;
-  const fov=130, camZ=28, yOff=56;
-  function edgeX(p1,p2,y){const dy=p2.y-p1.y;return Math.abs(dy)<0.001?p1.x:p1.x+(y-p1.y)*(p2.x-p1.x)/dy}
-  function edgeFrac(p1,p2,y){const dy=p2.y-p1.y;return Math.abs(dy)<0.001?0.5:(y-p1.y)/dy}
+  const fov=130,camZ=28,yOff=56;
 
-  function rasterTri(t){
+  function edge(e,px,py){return e[0]*(py+0.5-e[3])-e[1]*(px+0.5-e[2])}
+
+  for(const t of tris){
     const sp=t.v.map(v=>{
       const z=v.z+camZ;if(z<1)return null;
       return {x:v.x*fov/z+W/2,y:-v.y*fov/z+H/2+yOff}
     });
-    if(!sp[0]||!sp[1]||!sp[2])return;
-    const uv=t.uv,o=[0,1,2];o.sort((a,b)=>sp[a].y-sp[b].y);
-    const a=sp[o[0]],b=sp[o[1]],c=sp[o[2]];
-    if(a.y>=c.y)return;
-    const minY=Math.max(0,Math.floor(a.y)),maxY=Math.min(H-1,Math.ceil(c.y));
-    if(minY>=maxY)return;
+    if(!sp[0]||!sp[1]||!sp[2])continue;
+    const uv=t.uv;
 
-    function iU(i,j,t){return uv[i][0]/64+(uv[j][0]/64-uv[i][0]/64)*t}
-    function iV(i,j,t){return uv[i][1]/64+(uv[j][1]/64-uv[i][1]/64)*t}
+    const bx0=Math.max(0,Math.floor(Math.min(sp[0].x,sp[1].x,sp[2].x)));
+    const bx1=Math.min(W-1,Math.ceil(Math.max(sp[0].x,sp[1].x,sp[2].x)));
+    const by0=Math.max(0,Math.floor(Math.min(sp[0].y,sp[1].y,sp[2].y)));
+    const by1=Math.min(H-1,Math.ceil(Math.max(sp[0].y,sp[1].y,sp[2].y)));
+    if(bx0>bx1||by0>by1)continue;
 
-    for(let py=minY;py<=maxY;py++){
-      let x1,x2,u1,v1,u2,v2;
-      const ft=Math.abs(b.y-a.y)<0.5, fb=Math.abs(c.y-b.y)<0.5;
-      if(ft){
-        x1=edgeX(sp[o[0]],sp[o[2]],py);x2=edgeX(sp[o[1]],sp[o[2]],py);
-        const t1=edgeFrac(sp[o[0]],sp[o[2]],py),t2=edgeFrac(sp[o[1]],sp[o[2]],py);
-        u1=iU(o[0],o[2],t1);v1=iV(o[0],o[2],t1);u2=iU(o[1],o[2],t2);v2=iV(o[1],o[2],t2);
-      }else if(fb){
-        x1=edgeX(sp[o[0]],sp[o[1]],py);x2=edgeX(sp[o[0]],sp[o[2]],py);
-        const t1=edgeFrac(sp[o[0]],sp[o[1]],py),t2=edgeFrac(sp[o[0]],sp[o[2]],py);
-        u1=iU(o[0],o[1],t1);v1=iV(o[0],o[1],t1);u2=iU(o[0],o[2],t2);v2=iV(o[0],o[2],t2);
-      }else if(py<b.y){
-        x1=edgeX(sp[o[0]],sp[o[1]],py);x2=edgeX(sp[o[0]],sp[o[2]],py);
-        const t1=edgeFrac(sp[o[0]],sp[o[1]],py),t2=edgeFrac(sp[o[0]],sp[o[2]],py);
-        u1=iU(o[0],o[1],t1);v1=iV(o[0],o[1],t1);u2=iU(o[0],o[2],t2);v2=iV(o[0],o[2],t2);
-      }else{
-        x1=edgeX(sp[o[1]],sp[o[2]],py);x2=edgeX(sp[o[0]],sp[o[2]],py);
-        const t1=edgeFrac(sp[o[1]],sp[o[2]],py),t2=edgeFrac(sp[o[0]],sp[o[2]],py);
-        u1=iU(o[1],o[2],t1);v1=iV(o[1],o[2],t1);u2=iU(o[0],o[2],t2);v2=iV(o[0],o[2],t2);
-      }
-      if(x1>x2){
-        let t=x1;x1=x2;x2=t;t=u1;u1=u2;u2=t;t=v1;v1=v2;v2=t
-      }
-      const sl=Math.max(0,Math.floor(x1)),sr=Math.min(W-1,Math.ceil(x2));
-      if(sl>sr)continue;
-      for(let px=sl;px<=sr;px++){
-        const fr=x2===x1?0.5:(px-x1)/(x2-x1);
-        const tu=u1+(u2-u1)*fr,tv=v1+(v2-v1)*fr;
+    const eAB=[sp[1].x-sp[0].x,sp[1].y-sp[0].y,sp[0].x,sp[0].y];
+    const eBC=[sp[2].x-sp[1].x,sp[2].y-sp[1].y,sp[1].x,sp[1].y];
+    const eCA=[sp[0].x-sp[2].x,sp[0].y-sp[2].y,sp[2].x,sp[2].y];
+
+    for(let py=by0;py<=by1;py++){
+      for(let px=bx0;px<=bx1;px++){
+        const e0=edge(eBC,px,py),e1=edge(eCA,px,py),e2=edge(eAB,px,py);
+        const sum=e0+e1+e2;
+        if(sum===0)continue;
+        const u=e0/sum,v=e1/sum,w=e2/sum;
+        if(u<0||v<0||w<0)continue;
+
+        const tu=(u*uv[0][0]+v*uv[1][0]+(1-u-v)*uv[2][0])/64;
+        const tv=(u*uv[0][1]+v*uv[1][1]+(1-u-v)*uv[2][1])/64;
         const si=Math.min(tw-1,Math.max(0,Math.round(tu*tw)));
         const sj=Math.min(th-1,Math.max(0,Math.round(tv*th)));
         const ti=(sj*tw+si)*4;
@@ -1636,8 +1619,6 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
       }
     }
   }
-
-  for(const t of tris)rasterTri(t);
   ctx.putImageData(out,0,0);
 }
 
