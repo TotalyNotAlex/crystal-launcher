@@ -769,6 +769,17 @@ function updateAccounts() {
   const active = accounts.find((a) => a.id === activeAccountId) || accounts[0];
   $('sidebar-username').textContent = active?.name || t('accounts.no_account');
   $('sidebar-account-type').textContent = active ? (active.type === 'microsoft' ? 'Microsoft' : 'Offline') : t('accounts.add_account');
+  const avatarImg = $('sidebar-avatar-img');
+  const avatarFallback = $('sidebar-avatar-fallback');
+  if (active?.name) {
+    avatarImg.src = `https://crafatar.com/avatars/${active.name}?size=40&overlay`;
+    avatarImg.style.display = 'block';
+    avatarImg.onerror = () => { avatarImg.style.display = 'none'; avatarFallback.style.display = 'block'; };
+    avatarFallback.style.display = 'none';
+  } else {
+    avatarImg.style.display = 'none';
+    avatarFallback.style.display = 'block';
+  }
   accounts.forEach((a) => {
     const card = document.createElement('div');
     card.className = 'account-card';
@@ -1461,6 +1472,104 @@ async function init() {
     }, 1000);
   }
 }
+
+// Skin Changer
+let currentSkins = [];
+let activeSkinName = 'default';
+
+function loadSkinPreview(name, data) {
+  const canvas = $('skin-preview-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 120, 120);
+  if (!data && name === 'default') {
+    ctx.fillStyle = '#4a4a6a'; ctx.fillRect(0, 0, 120, 120);
+    ctx.fillStyle = '#6a6a8a'; ctx.fillRect(20, 20, 80, 80);
+    ctx.fillStyle = '#8a8aaa'; ctx.fillRect(40, 10, 40, 20);
+    $('skin-current-name').textContent = 'Default';
+    return;
+  }
+  const img = new Image();
+  img.onload = () => {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, 120, 120);
+    $('skin-current-name').textContent = name;
+  };
+  if (data) img.src = 'data:image/png;base64,' + data;
+}
+
+async function refreshSkinList() {
+  const list = $('skin-list');
+  const typeEl = $('skin-account-type');
+  const active = accounts.find((a) => a.id === activeAccountId);
+  typeEl.textContent = active?.type === 'microsoft' ? 'Microsoft account — skins apply via Mojang API' : 'Offline account — skins saved locally (use a skin mod to apply)';
+  currentSkins = await window.api.getSavedSkins();
+  list.innerHTML = '';
+  const defaultItem = document.createElement('div');
+  defaultItem.className = 'skin-item' + (activeSkinName === 'default' ? ' active' : '');
+  defaultItem.innerHTML = '<div style="width:32px;height:32px;background:#4a4a6a;border-radius:4px;"></div><span style="font-size:12px;">Default</span>';
+  defaultItem.onclick = () => { activeSkinName = 'default'; loadSkinPreview('default', null); refreshSkinList(); };
+  list.appendChild(defaultItem);
+  currentSkins.forEach((s) => {
+    const el = document.createElement('div');
+    el.className = 'skin-item' + (activeSkinName === s.name ? ' active' : '');
+    el.innerHTML = `<img src="data:image/png;base64,${s.data}" alt=""><span style="font-size:12px;">${s.name}</span>`;
+    el.onclick = () => { activeSkinName = s.name; loadSkinPreview(s.name, s.data); refreshSkinList(); };
+    list.appendChild(el);
+  });
+}
+
+$('sidebar-account-badge').onclick = () => {
+  $('modal-skin-changer').classList.add('active');
+  refreshSkinList();
+  loadSkinPreview(activeSkinName, currentSkins.find((s) => s.name === activeSkinName)?.data);
+};
+
+$('skin-upload-btn').onclick = () => $('skin-file-input').click();
+
+$('skin-file-input').onchange = async function () {
+  const file = this.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const base64 = e.target.result.split(',')[1];
+    const name = file.name.replace('.png', '').replace(/[^a-z0-9_]/gi, '_') || 'skin';
+    const result = await window.api.saveSkinFile(name, base64);
+    if (result.success) {
+      activeSkinName = name;
+      refreshSkinList();
+      loadSkinPreview(name, base64);
+      const active = accounts.find((a) => a.id === activeAccountId);
+      if (active?.type === 'microsoft') {
+        toast('Applying skin...', 'Uploading to Mojang API');
+        const apply = await window.api.applyMicrosoftSkin(result.path, 'classic');
+        if (apply.success) toast('Skin applied', 'Your Minecraft skin has been updated');
+        else toast('Skin upload failed', apply.error, 'error');
+      } else {
+        toast('Skin saved', 'Saved locally. Use a skin mod to apply it.');
+      }
+    } else {
+      toast('Error', result.error, 'error');
+    }
+  };
+  reader.readAsDataURL(file);
+  this.value = '';
+};
+
+$('skin-reset-btn').onclick = async () => {
+  activeSkinName = 'default';
+  loadSkinPreview('default', null);
+  refreshSkinList();
+  const active = accounts.find((a) => a.id === activeAccountId);
+  if (active?.type === 'microsoft') {
+    toast('Resetting skin...', 'Applying default skin via Mojang API');
+    const apply = await window.api.applyMicrosoftSkin('default', 'classic');
+    if (apply.success) toast('Skin reset', 'Default skin applied');
+    else toast('Reset failed', apply.error, 'error');
+  } else {
+    toast('Skin reset', 'Default selected');
+  }
+};
 
 window.api.onMcDownloadProgress((p) => {
   const pc = $('progress-text');

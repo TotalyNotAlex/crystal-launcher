@@ -80,9 +80,10 @@
             <span data-i18n="titlebar.settings">Settings</span>
           </div>
         </div>
-        <div class="account-badge" id="sidebar-account-badge">
+        <div class="account-badge" id="sidebar-account-badge" style="cursor:pointer;">
           <div class="badge-avatar" id="sidebar-avatar">
-            <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <img id="sidebar-avatar-img" src="" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:none;">
+            <svg id="sidebar-avatar-fallback" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
           </div>
           <div class="badge-info">
             <div class="badge-name" id="sidebar-username">Offline Player</div>
@@ -628,6 +629,33 @@
       <pre id="crash-log-content" style="background:var(--bg-deep);color:var(--text-dim);padding:12px;border-radius:var(--radius-sm);font-size:11px;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:12px 0;font-family:monospace;"></pre>
       <div class="modal-actions">
         <button class="btn btn-secondary" onclick="document.getElementById('modal-crash-log').classList.remove('active')" data-i18n="profiles.cancel">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SKIN CHANGER MODAL -->
+  <div class="modal-overlay" id="modal-skin-changer">
+    <div class="modal modal-wide">
+      <div style="display:flex;gap:20px;padding:8px 0;">
+        <div style="flex-shrink:0;text-align:center;">
+          <div style="width:120px;height:120px;background:var(--bg-deep);border-radius:var(--radius-md);overflow:hidden;margin-bottom:8px;">
+            <canvas id="skin-preview-canvas" width="120" height="120" style="width:120px;height:120px;image-rendering:pixelated;"></canvas>
+          </div>
+          <div style="font-size:11px;color:var(--text-dim);" id="skin-current-name">Default</div>
+        </div>
+        <div style="flex:1;">
+          <h3 style="color:var(--text);font-size:15px;font-weight:600;margin-bottom:12px;">Skin Manager</h3>
+          <div id="skin-account-type" style="font-size:11px;color:var(--text-dim);margin-bottom:12px;"></div>
+          <div id="skin-list" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;margin-bottom:12px;"></div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-primary" id="skin-upload-btn" style="font-size:11px;padding:6px 12px;">Upload Skin</button>
+            <input type="file" id="skin-file-input" accept=".png" style="display:none;">
+            <button class="btn btn-secondary" id="skin-reset-btn" style="font-size:11px;padding:6px 12px;">Reset to Default</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('modal-skin-changer').classList.remove('active')">Close</button>
       </div>
     </div>
   </div>

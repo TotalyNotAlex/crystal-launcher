@@ -263,6 +263,25 @@ html, body {
 /* Crash log modal */
 #crash-log-content { user-select: text; }
 
+#sidebar-avatar { position:relative; cursor:pointer; }
+#sidebar-avatar:hover::after {
+  content:'SKIN';
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.6); border-radius:50%;
+  font-size:8px; font-weight:700; color:var(--accent); letter-spacing:0.5px;
+}
+
+.skin-item {
+  display:flex; align-items:center; gap:8px;
+  background:var(--bg-surface); border-radius:var(--radius-sm);
+  padding:6px 10px; cursor:pointer;
+  border:1px solid transparent; transition:all 0.15s;
+}
+.skin-item:hover { border-color:var(--accent-dim); background:var(--bg-elevated); }
+.skin-item.active { border-color:var(--accent); }
+.skin-item img { width:32px; height:32px; border-radius:4px; image-rendering:pixelated; background:var(--bg-deep); }
+
 .mod-update-badge {
   background: var(--accent-dim);
   color: var(--accent);

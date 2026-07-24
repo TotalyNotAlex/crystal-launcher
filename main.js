@@ -380,6 +380,73 @@ function getPlaytimeSessions() {
 ipcMain.handle('check-updates', async () => updateService.checkForUpdates());
 ipcMain.handle('get-app-version', async () => { try { return require(path.join(__dirname, 'package.json')).version; } catch { return '1.0.3'; } });
 
+ipcMain.handle('get-saved-skins', async () => {
+  const skinDir = path.join(baseDataDir, 'skins');
+  if (!fs.existsSync(skinDir)) return [];
+  const skins = [];
+  for (const f of fs.readdirSync(skinDir)) {
+    if (f.endsWith('.png')) {
+      const data = fs.readFileSync(path.join(skinDir, f)).toString('base64');
+      skins.push({ name: f.replace('.png', ''), data, path: path.join(skinDir, f) });
+    }
+  }
+  return skins;
+});
+
+ipcMain.handle('save-skin-file', async (e, { name, base64Data }) => {
+  try {
+    const skinDir = path.join(baseDataDir, 'skins');
+    if (!fs.existsSync(skinDir)) fs.mkdirSync(skinDir, { recursive: true });
+    const buf = Buffer.from(base64Data, 'base64');
+    const filePath = path.join(skinDir, `${name}.png`);
+    fs.writeFileSync(filePath, buf);
+    return { success: true, path: filePath };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+ipcMain.handle('delete-skin', async (e, name) => {
+  try {
+    const p = path.join(baseDataDir, 'skins', `${name}.png`);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+    return { success: true };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+ipcMain.handle('apply-microsoft-skin', async (e, { skinPath, variant }) => {
+  try {
+    const accounts = getSavedAccounts();
+    const active = accounts.find((a) => a.id === activeAccountId) || accounts[0];
+    if (!active || active.type !== 'microsoft' || !active.accessToken) return { success: false, error: 'No Microsoft account' };
+    let psCmd;
+    if (skinPath === 'default') {
+      psCmd = `try { ` +
+        `$uri = 'https://api.mojang.com/user/profile/${active.id}/skin'; ` +
+        `$body = @{model='${variant || 'classic'}'; url='http://assets.mojang.com/SkinTemplates/steve.png'}; ` +
+        `Invoke-RestMethod -Uri $uri -Method Put -Headers @{Authorization='Bearer ${active.accessToken}'} -Body $body; ` +
+        `write-host 'OK' } catch { write-host ('ERR:'+$_.Exception.Message) }`;
+    } else {
+      const skinBuf = fs.readFileSync(skinPath);
+      const b64 = skinBuf.toString('base64');
+      psCmd = `try { ` +
+        `$uri = 'https://api.mojang.com/user/profile/${active.id}/skin'; ` +
+        `$bytes = [System.Convert]::FromBase64String('${b64}'); ` +
+        `$boundary = [Guid]::NewGuid().ToString(); ` +
+        `$nl = [char]13 + [char]10; ` +
+        `$body = @(); ` +
+        `$body += '--' + $boundary; $body += 'Content-Disposition: form-data; name=\"model\"'; $body += ''; $body += '${variant || 'classic'}'; ` +
+        `$body += '--' + $boundary; $body += 'Content-Disposition: form-data; name=\"file\"; filename=\"skin.png\"'; $body += 'Content-Type: image/png'; $body += ''; ` +
+        `$bodyStr = [string]::Join($nl, $body); ` +
+        `$bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyStr); ` +
+        `$totalBytes = $bodyBytes + $nl + $bytes + $nl + '--' + $boundary + '--'; ` +
+        `Invoke-RestMethod -Uri $uri -Method Put -Headers @{Authorization='Bearer ${active.accessToken}'; 'Content-Type'='multipart/form-data; boundary='+$boundary} -Body $totalBytes; ` +
+        `write-host 'OK' } catch { write-host ('ERR:'+$_.Exception.Message) }`;
+    }
+    const result = execSync(`powershell -NoProfile -Command "${psCmd.replace(/"/g, '\\"')}"`, { timeout: 30000 }).toString().trim();
+    if (result === 'OK') return { success: true };
+    return { success: false, error: result.replace('ERR:', '') || 'Failed to apply skin' };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
 ipcMain.handle('get-crash-logs', async () => {
   const crashDir = path.join(baseDataDir, 'game', 'crash-reports');
   if (!fs.existsSync(crashDir)) return [];
