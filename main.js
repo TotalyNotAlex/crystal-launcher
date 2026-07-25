@@ -462,33 +462,43 @@ ipcMain.handle('apply-microsoft-skin', async (e, { skinPath, variant }) => {
     const accounts = getSavedAccounts();
     const active = accounts.find((a) => a.id === activeAccountId) || accounts[0];
     if (!active || active.type !== 'microsoft' || !active.accessToken) return { success: false, error: 'No Microsoft account' };
-    let psCmd;
+
+    const token = active.accessToken;
+    const boundary = '----' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const nl = '\r\n';
+
     if (skinPath === 'default') {
-      psCmd = `try { ` +
-        `$uri = 'https://api.mojang.com/user/profile/${active.id}/skin'; ` +
-        `$body = @{model='${variant || 'classic'}'; url='http://assets.mojang.com/SkinTemplates/steve.png'}; ` +
-        `Invoke-RestMethod -Uri $uri -Method Put -Headers @{Authorization='Bearer ${active.accessToken}'} -Body $body; ` +
-        `write-host 'OK' } catch { write-host ('ERR:'+$_.Exception.Message) }`;
-    } else {
-      const skinBuf = fs.readFileSync(skinPath);
-      const b64 = skinBuf.toString('base64');
-      psCmd = `try { ` +
-        `$uri = 'https://api.mojang.com/user/profile/${active.id}/skin'; ` +
-        `$bytes = [System.Convert]::FromBase64String('${b64}'); ` +
-        `$boundary = [Guid]::NewGuid().ToString(); ` +
-        `$nl = [char]13 + [char]10; ` +
-        `$body = @(); ` +
-        `$body += '--' + $boundary; $body += 'Content-Disposition: form-data; name=\"model\"'; $body += ''; $body += '${variant || 'classic'}'; ` +
-        `$body += '--' + $boundary; $body += 'Content-Disposition: form-data; name=\"file\"; filename=\"skin.png\"'; $body += 'Content-Type: image/png'; $body += ''; ` +
-        `$bodyStr = [string]::Join($nl, $body); ` +
-        `$bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyStr); ` +
-        `$totalBytes = $bodyBytes + $nl + $bytes + $nl + '--' + $boundary + '--'; ` +
-        `Invoke-RestMethod -Uri $uri -Method Put -Headers @{Authorization='Bearer ${active.accessToken}'; 'Content-Type'='multipart/form-data; boundary='+$boundary} -Body $totalBytes; ` +
-        `write-host 'OK' } catch { write-host ('ERR:'+$_.Exception.Message) }`;
+      const res = await fetch('https://api.minecraftservices.com/minecraft/profile/skins/active', {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (res.ok || res.status === 204) return { success: true };
+      const body = await res.text();
+      return { success: false, error: `Reset failed (${res.status}): ${body}` };
     }
-    const result = execSync(`powershell -NoProfile -Command "${psCmd.replace(/"/g, '\\"')}"`, { timeout: 30000 }).toString().trim();
-    if (result === 'OK') return { success: true };
-    return { success: false, error: result.replace('ERR:', '') || 'Failed to apply skin' };
+
+    const skinBuf = fs.readFileSync(skinPath);
+    const variantVal = variant === 'slim' ? 'SLIM' : 'CLASSIC';
+
+    const parts = [
+      Buffer.from(`--${boundary}${nl}Content-Disposition: form-data; name="variant"${nl}${nl}${variantVal}${nl}`),
+      Buffer.from(`--${boundary}${nl}Content-Disposition: form-data; name="file"; filename="skin.png"${nl}Content-Type: image/png${nl}${nl}`),
+      skinBuf,
+      Buffer.from(`${nl}--${boundary}--${nl}`)
+    ];
+    const body = Buffer.concat(parts);
+
+    const res = await fetch('https://api.minecraftservices.com/minecraft/profile/skins', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'multipart/form-data; boundary=' + boundary
+      },
+      body
+    });
+    if (res.ok) return { success: true };
+    const errBody = await res.text();
+    return { success: false, error: `Upload failed (${res.status}): ${errBody}` };
   } catch (err) { return { success: false, error: err.message }; }
 });
 
