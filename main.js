@@ -461,45 +461,79 @@ ipcMain.handle('apply-microsoft-skin', async (e, { skinPath, variant }) => {
   try {
     const accounts = getSavedAccounts();
     const active = accounts.find((a) => a.id === activeAccountId) || accounts[0];
-    if (!active || active.type !== 'microsoft' || !active.accessToken) return { success: false, error: 'No Microsoft account' };
-
-    const token = active.accessToken;
-    const boundary = '----' + Date.now().toString(36) + Math.random().toString(36).slice(2);
-    const nl = '\r\n';
-
-    if (skinPath === 'default') {
-      const res = await fetch('https://api.minecraftservices.com/minecraft/profile/skins/active', {
-        method: 'DELETE',
-        headers: { Authorization: 'Bearer ' + token }
-      });
-      if (res.ok || res.status === 204) return { success: true };
-      const body = await res.text();
-      return { success: false, error: `Reset failed (${res.status}): ${body}` };
+    if (!active || active.type !== 'microsoft' || !active.accessToken) {
+      return { success: false, error: 'No active Microsoft account logged in.' };
     }
 
-    const skinBuf = fs.readFileSync(skinPath);
-    const variantVal = variant === 'slim' ? 'SLIM' : 'CLASSIC';
+    const doUpload = async (token) => {
+      if (skinPath === 'default') {
+        const res = await fetch('https://api.minecraftservices.com/minecraft/profile/skins/active', {
+          method: 'DELETE',
+          headers: { Authorization: 'Bearer ' + token }
+        });
+        const text = await res.text();
+        return { status: res.status, ok: res.ok || res.status === 204, body: text };
+      }
 
-    const parts = [
-      Buffer.from(`--${boundary}${nl}Content-Disposition: form-data; name="variant"${nl}${nl}${variantVal}${nl}`),
-      Buffer.from(`--${boundary}${nl}Content-Disposition: form-data; name="file"; filename="skin.png"${nl}Content-Type: image/png${nl}${nl}`),
-      skinBuf,
-      Buffer.from(`${nl}--${boundary}--${nl}`)
-    ];
-    const body = Buffer.concat(parts);
+      if (!fs.existsSync(skinPath)) {
+        return { status: 400, ok: false, body: 'Skin file not found on disk.' };
+      }
 
-    const res = await fetch('https://api.minecraftservices.com/minecraft/profile/skins', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + token,
-        'Content-Type': 'multipart/form-data; boundary=' + boundary
-      },
-      body
-    });
-    if (res.ok) return { success: true };
-    const errBody = await res.text();
-    return { success: false, error: `Upload failed (${res.status}): ${errBody}` };
-  } catch (err) { return { success: false, error: err.message }; }
+      const skinBuf = fs.readFileSync(skinPath);
+      const boundary = '----WebKitFormBoundary' + Date.now().toString(36) + Math.random().toString(36).substring(2);
+      const nl = '\r\n';
+      const variantStr = (variant || 'classic').toString().toLowerCase() === 'slim' ? 'slim' : 'classic';
+
+      const parts = [
+        Buffer.from(`--${boundary}${nl}Content-Disposition: form-data; name="variant"${nl}${nl}${variantStr}${nl}`),
+        Buffer.from(`--${boundary}${nl}Content-Disposition: form-data; name="file"; filename="skin.png"${nl}Content-Type: image/png${nl}${nl}`),
+        skinBuf,
+        Buffer.from(`${nl}--${boundary}--${nl}`)
+      ];
+      const body = Buffer.concat(parts);
+
+      const res = await fetch('https://api.minecraftservices.com/minecraft/profile/skins', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'multipart/form-data; boundary=' + boundary
+        },
+        body
+      });
+      const text = await res.text();
+      return { status: res.status, ok: res.ok, body: text };
+    };
+
+    let token = active.accessToken;
+    let res = await doUpload(token);
+
+    if (!res.ok && res.status === 401 && active.refreshToken) {
+      try {
+        const refreshed = await authService.refreshMicrosoftToken(active.refreshToken);
+        if (refreshed && refreshed.accessToken) {
+          saveAccountToStore(refreshed);
+          token = refreshed.accessToken;
+          res = await doUpload(token);
+        }
+      } catch (refErr) {
+        console.warn('Token refresh failed during skin upload:', refErr.message);
+      }
+    }
+
+    if (res.ok) {
+      return { success: true };
+    } else {
+      let msg = res.body;
+      try {
+        const json = JSON.parse(res.body);
+        if (json.errorMessage) msg = json.errorMessage;
+        else if (json.developerMessage) msg = json.errorMessage || json.developerMessage;
+      } catch {}
+      return { success: false, error: `Minecraft API error (${res.status}): ${msg}` };
+    }
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 ipcMain.handle('get-crash-logs', async () => {

@@ -1504,34 +1504,53 @@ const FACE_VTX = {
   f:[0,1,2,3], b:[4,5,6,7], l:[4,0,3,7], r:[1,5,6,2], t:[4,5,1,0], m:[3,2,6,7]
 };
 
-function buildFaces(parts, texPixels, isHd) {
+function buildFaces(parts, texPixels, tw, isHd) {
   let tris = [];
+  const inf = 0.5; // Outer-layer overlay inflation for 3D depth
+
   for (const p of parts) {
-    const [cx,cy,cz]=p[0];const[w,h,d]=p[1];const u=p[2];const ov=p[3];
-    const hw=w/2,hh=h/2,hd=d/2;
+    const [cx,cy,cz]=p[0]; const [w,h,d]=p[1]; const u=p[2]; const ov=p[3];
+    const hw=w/2, hh=h/2, hd=d/2;
+
+    // Base inner layer vertices
     const vt=[
       v3(cx-hw,cy+hh,cz+hd),v3(cx+hw,cy+hh,cz+hd),v3(cx+hw,cy-hh,cz+hd),v3(cx-hw,cy-hh,cz+hd),
       v3(cx-hw,cy+hh,cz-hd),v3(cx+hw,cy+hh,cz-hd),v3(cx+hw,cy-hh,cz-hd),v3(cx-hw,cy-hh,cz-hd)
     ];
-    function addTri(a,b,c,ua,ub,uc){
-      tris.push({v:[vt[a],vt[b],vt[c]],uv:[ua,ub,uc],depth:0});
+
+    // Inflated outer layer vertices for 3D hat/jacket/sleeves/pants
+    const ohw=(w+inf)/2, ohh=(h+inf)/2, ohd=(d+inf)/2;
+    const ov_vt=[
+      v3(cx-ohw,cy+ohh,cz+ohd),v3(cx+ohw,cy+ohh,cz+ohd),v3(cx+ohw,cy-ohh,cz+ohd),v3(cx-ohw,cy-ohh,cz+ohd),
+      v3(cx-ohw,cy+ohh,cz-ohd),v3(cx+ohw,cy+ohh,cz-ohd),v3(cx+ohw,cy-ohh,cz-ohd),v3(cx-ohw,cy-ohh,cz-ohd)
+    ];
+
+    function addTri(targetVt, a, b, c, ua, ub, uc) {
+      tris.push({v:[targetVt[a],targetVt[b],targetVt[c]], uv:[ua,ub,uc], depth:0});
     }
+
     for (const [k,vi] of Object.entries(FACE_VTX)) {
       if (!u[k]) continue;
       const [ux,uy,uw,uh]=u[k];
       const uv=[ [ux,uy],[ux+uw,uy],[ux+uw,uy+uh],[ux,uy+uh] ];
-      // Split quad into 2 triangles: (0,1,2) and (0,2,3)
-      addTri(vi[0],vi[1],vi[2],uv[0],uv[1],uv[2]);
-      addTri(vi[0],vi[2],vi[3],uv[0],uv[2],uv[3]);
-      // Overlay
+      // Base layer triangles
+      addTri(vt, vi[0],vi[1],vi[2], uv[0],uv[1],uv[2]);
+      addTri(vt, vi[0],vi[2],vi[3], uv[0],uv[2],uv[3]);
+
+      // Outer layer overlay (hat, jacket, sleeves, pants)
       if (isHd && ov && ov[k]) {
         const [ox,oy,ow,oh]=ov[k];
         let has=false;
-        for(let r=0;r<oh&&!has;r++)for(let c=0;c<ow;c++)if(texPixels[((oy+r)*64+ox+c)*4+3]>0){has=true;break}
-        if(has){
+        for(let r=0; r<oh && !has; r++) {
+          for(let c=0; c<ow; c++) {
+            const idx = ((oy+r)*tw + (ox+c))*4 + 3;
+            if (texPixels[idx] > 128) { has=true; break; }
+          }
+        }
+        if (has) {
           const ouv=[ [ox,oy],[ox+ow,oy],[ox+ow,oy+oh],[ox,oy+oh] ];
-          addTri(vi[0],vi[1],vi[2],ouv[0],ouv[1],ouv[2]);
-          addTri(vi[0],vi[2],vi[3],ouv[0],ouv[2],ouv[3]);
+          addTri(ov_vt, vi[0],vi[1],vi[2], ouv[0],ouv[1],ouv[2]);
+          addTri(ov_vt, vi[0],vi[2],vi[3], ouv[0],ouv[2],ouv[3]);
         }
       }
     }
@@ -1539,18 +1558,13 @@ function buildFaces(parts, texPixels, isHd) {
   return tris;
 }
 
-function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
+function renderSkin3D(ctx, W, H, tw, th, texPixels, yaw, pitch, slim) {
   ctx.clearRect(0,0,W,H);
   const grad=ctx.createRadialGradient(W/2,200,2,W/2,200,55);
   grad.addColorStop(0,'rgba(0,0,0,0.5)');grad.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=grad;ctx.beginPath();ctx.ellipse(W/2,204,55,10,0,0,Math.PI*2);ctx.fill();
 
-  const tw=img.naturalWidth, th=img.naturalHeight;
-  const isHd=th===64;
-  const texC=document.createElement('canvas');texC.width=tw;texC.height=th;
-  const tCtx=texC.getContext('2d');tCtx.drawImage(img,0,0);
-  const texPixels=tCtx.getImageData(0,0,tw,th).data;
-
+  const isHd = th === 64 || th === 128;
   const w=slim?3:4, rU=armUV(w), rO=armOV(w);
   const rAB=isHd?{f:[36,52,w,12],b:[36,52,w,12],l:[36,52,w,12],r:[36,52,w,12],t:[36,48,w,4],m:[40,48,w,4]}:rU;
   const leg32={f:[4,20,4,12],b:[4,20,4,12],l:[4,20,4,12],r:[4,20,4,12],t:[4,16,4,4],m:[8,16,4,4]};
@@ -1567,7 +1581,7 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
     [[2,6,0],[4,12,4],rLB,isHd?rLO:null]
   ];
 
-  let tris=buildFaces(parts,texPixels,isHd);
+  let tris=buildFaces(parts,texPixels,tw,isHd);
   const my=rotY(yaw),mx=rotX(pitch);
   for(const t of tris){
     for(let i=0;i<3;i++){t.v[i]=mxv(my,mxv(mx,t.v[i]));t.depth+=t.v[i].z}
@@ -1610,7 +1624,7 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
         const tu=(u*uv[0][0]+v*uv[1][0]+(1-u-v)*uv[2][0])/64;
         const tv=(u*uv[0][1]+v*uv[1][1]+(1-u-v)*uv[2][1])/64;
         const si=Math.min(tw-1,Math.max(0,Math.round(tu*tw)));
-        const sj=Math.min(th-1,Math.max(0,Math.round(tv*th)));
+        const sj=Math.min(th-1,Math.max(0,Math.round(tv*tw))); // tv*tw maps grid Y directly!
         const ti=(sj*tw+si)*4;
         if(texPixels[ti+3]>128){
           const di=(py*W+px)*4;
@@ -1624,7 +1638,15 @@ function renderSkin3D(ctx, W, H, img, yaw, pitch, slim) {
 
 function startSkinViewer(canvas, img, modelType) {
   stopSkinViewer();
-  sv={canvas,ctx:canvas.getContext('2d'),img,yaw:0.4,pitch:-0.15,slim:modelType==='slim',dragging:false,lx:0,ly:0};
+
+  const tw = img.naturalWidth || 64, th = img.naturalHeight || 64;
+  const texC = document.createElement('canvas');
+  texC.width = tw; texC.height = th;
+  const tCtx = texC.getContext('2d');
+  tCtx.drawImage(img, 0, 0);
+  const texPixels = tCtx.getImageData(0, 0, tw, th).data;
+
+  sv={canvas,ctx:canvas.getContext('2d'),img,tw,th,texPixels,yaw:0.4,pitch:-0.15,slim:modelType==='slim',dragging:false,lx:0,ly:0};
   sv.ctx.imageSmoothingEnabled=false;
 
   function pt(e){return e.touches?{x:e.touches[0].clientX,y:e.touches[0].clientY}:{x:e.clientX,y:e.clientY}}
@@ -1652,7 +1674,7 @@ function startSkinViewer(canvas, img, modelType) {
 
   function frame() {
     if (!sv) return;
-    renderSkin3D(sv.ctx, canvas.width, canvas.height, sv.img, sv.yaw, sv.pitch, sv.slim);
+    renderSkin3D(sv.ctx, canvas.width, canvas.height, sv.tw, sv.th, sv.texPixels, sv.yaw, sv.pitch, sv.slim);
     svAnimId = requestAnimationFrame(frame);
   }
   frame();
@@ -1729,21 +1751,27 @@ function showSkinTexture(img, name) {
 function renderSkinList() {
   const list = $('skin-list');
   const typeEl = $('skin-account-type');
-  const active = accounts.find((a) => a.id === activeAccountId);
+  const activeAccount = accounts.find((a) => a.id === activeAccountId);
   if (typeEl) {
-    typeEl.textContent = active?.type === 'microsoft'
-      ? 'Changes apply to your Minecraft account via Mojang API'
-      : 'Skins saved locally — use a skin mod to apply';
+    typeEl.textContent = activeAccount?.type === 'microsoft'
+      ? 'Changes apply directly to your official Minecraft account via Minecraft API'
+      : 'Skins saved locally — use a skin mod to apply in offline mode';
   }
   list.innerHTML = '';
 
   const defaultItem = document.createElement('div');
   defaultItem.className = 'skin-list-item' + (activeSkinName === 'default' ? ' active' : '');
   defaultItem.innerHTML = `<div style="width:32px;height:32px;border-radius:6px;background:var(--bg-deep);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="var(--text-muted)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg></div><span class="skin-list-name">Default</span>`;
-  defaultItem.onclick = () => {
+  defaultItem.onclick = async () => {
     activeSkinName = 'default';
     loadSkinToPreview('default', null);
     renderSkinList();
+    if (activeAccount?.type === 'microsoft') {
+      toast('Resetting skin...', 'Applying default via Minecraft API');
+      const apply = await window.api.applyMicrosoftSkin('default', skinModelType);
+      if (apply.success) toast('Skin reset', 'Default skin applied to Minecraft account');
+      else toast('Reset failed', apply.error, 'error');
+    }
   };
   list.appendChild(defaultItem);
 
@@ -1751,12 +1779,20 @@ function renderSkinList() {
     const el = document.createElement('div');
     el.className = 'skin-list-item' + (activeSkinName === s.name ? ' active' : '');
     el.innerHTML = `<img src="data:image/png;base64,${s.data}" alt=""><span class="skin-list-name">${s.name}</span><button class="skin-list-delete" data-name="${s.name}"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="currentColor"/></svg></button>`;
-    const nameSpan = el.querySelector('.skin-list-name');
-    nameSpan.onclick = () => {
+    
+    el.onclick = async (evt) => {
+      if (evt.target.closest('.skin-list-delete')) return;
       activeSkinName = s.name;
       loadSkinToPreview(s.name, s.data);
       renderSkinList();
+      if (activeAccount?.type === 'microsoft' && s.path) {
+        toast('Applying skin...', `Uploading "${s.name}" to Minecraft API`);
+        const apply = await window.api.applyMicrosoftSkin(s.path, skinModelType);
+        if (apply.success) toast('Skin applied', `Applied "${s.name}" to your Minecraft account`);
+        else toast('Skin upload failed', apply.error, 'error');
+      }
     };
+
     const deleteBtn = el.querySelector('.skin-list-delete');
     deleteBtn.onclick = async (e) => {
       e.stopPropagation();
@@ -1836,20 +1872,36 @@ $('skin-file-input').onchange = async function () {
   this.value = '';
 };
 
-$('skin-model-classic').onclick = () => {
-  skinModelType = 'classic';
+async function handleModelToggle(newModel) {
+  skinModelType = newModel;
   document.querySelectorAll('.model-btn').forEach((b) => b.classList.remove('active'));
-  $('skin-model-classic').classList.add('active');
-  if (sv && sv.img) { startSkinViewer($('skin-preview-canvas'), sv.img, skinModelType); }
-  else { loadSkinToPreview(activeSkinName, null); }
-};
-$('skin-model-slim').onclick = () => {
-  skinModelType = 'slim';
-  document.querySelectorAll('.model-btn').forEach((b) => b.classList.remove('active'));
-  $('skin-model-slim').classList.add('active');
-  if (sv && sv.img) { startSkinViewer($('skin-preview-canvas'), sv.img, skinModelType); }
-  else { loadSkinToPreview(activeSkinName, null); }
-};
+  $(`skin-model-${newModel}`).classList.add('active');
+
+  const activeSkin = currentSkins.find((s) => s.name === activeSkinName);
+  if (sv && sv.img) {
+    startSkinViewer($('skin-preview-canvas'), sv.img, skinModelType);
+  } else {
+    loadSkinToPreview(activeSkinName, activeSkin?.data);
+  }
+
+  const activeAccount = accounts.find((a) => a.id === activeAccountId);
+  if (activeAccount?.type === 'microsoft') {
+    if (activeSkinName === 'default') {
+      toast('Updating model...', 'Setting model variant via Minecraft API');
+      const apply = await window.api.applyMicrosoftSkin('default', skinModelType);
+      if (apply.success) toast('Model updated', `Set model variant to ${skinModelType}`);
+      else toast('Update failed', apply.error, 'error');
+    } else if (activeSkin?.path) {
+      toast('Updating model...', `Setting ${skinModelType} model via Minecraft API`);
+      const apply = await window.api.applyMicrosoftSkin(activeSkin.path, skinModelType);
+      if (apply.success) toast('Model updated', `Updated to ${skinModelType} model variant`);
+      else toast('Update failed', apply.error, 'error');
+    }
+  }
+}
+
+$('skin-model-classic').onclick = () => handleModelToggle('classic');
+$('skin-model-slim').onclick = () => handleModelToggle('slim');
 
 $('skin-namemc-btn').onclick = async () => {
   const input = $('skin-namemc-input');
@@ -1864,21 +1916,24 @@ $('skin-namemc-btn').onclick = async () => {
       const name = result.name || username;
       const saveResult = await window.api.saveSkinFile(name, result.base64);
       if (saveResult.success) {
-        if (result.model === 'slim') {
-          skinModelType = 'slim';
-          document.querySelectorAll('.model-btn').forEach((b) => b.classList.remove('active'));
-          $('skin-model-slim').classList.add('active');
-        } else {
-          skinModelType = 'classic';
-          document.querySelectorAll('.model-btn').forEach((b) => b.classList.remove('active'));
-          $('skin-model-classic').classList.add('active');
-        }
+        skinModelType = result.model === 'slim' ? 'slim' : 'classic';
+        document.querySelectorAll('.model-btn').forEach((b) => b.classList.remove('active'));
+        $(`skin-model-${skinModelType}`).classList.add('active');
+
         activeSkinName = name;
         currentSkins = await window.api.getSavedSkins();
         renderSkinList();
         loadSkinToPreview(name, result.base64);
         toast('Skin fetched', `Loaded ${name}'s skin from NameMC`);
         input.value = '';
+
+        const activeAccount = accounts.find((a) => a.id === activeAccountId);
+        if (activeAccount?.type === 'microsoft' && saveResult.path) {
+          toast('Applying skin...', 'Uploading NameMC skin to Minecraft API');
+          const apply = await window.api.applyMicrosoftSkin(saveResult.path, skinModelType);
+          if (apply.success) toast('Skin applied', 'Your Minecraft account skin has been updated!');
+          else toast('Skin upload failed', apply.error, 'error');
+        }
       } else {
         toast('Error', saveResult.error, 'error');
       }
@@ -1887,9 +1942,10 @@ $('skin-namemc-btn').onclick = async () => {
     }
   } catch (err) {
     toast('Error', err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Search';
   }
-  btn.disabled = false;
-  btn.textContent = 'Search';
 };
 $('skin-namemc-input').onkeydown = (e) => {
   if (e.key === 'Enter') $('skin-namemc-btn').click();
