@@ -1478,215 +1478,42 @@ let currentSkins = [];
 let activeSkinName = 'default';
 let skinModelType = 'slim';
 
-// === 3D Skin Viewer (fixed geometry + triangle rasterizer) ===
-let sv = null;
-let svAnimId = null;
-
-const UV = {
-  head:  {f:[8,8,8,8],b:[24,8,8,8],l:[0,8,8,8],r:[16,8,8,8],t:[8,0,8,8],m:[16,0,8,8]},
-  hat:   {f:[40,8,8,8],b:[56,8,8,8],l:[32,8,8,8],r:[48,8,8,8],t:[40,0,8,8],m:[48,0,8,8]},
-  body:  {f:[20,20,8,12],b:[32,20,8,12],l:[16,20,4,12],r:[28,20,4,12],t:[20,16,8,4],m:[28,16,8,4]},
-  jack:  {f:[20,52,8,12],b:[32,52,8,12],l:[16,52,4,12],r:[28,52,4,12],t:[20,48,8,4],m:[28,48,8,4]},
-  lleg:  {f:[4,20,4,12],b:[20,52,4,12],l:[0,20,4,12],r:[8,20,4,12],t:[4,16,4,4],m:[8,16,4,4]},
-  llo:   {f:[4,36,4,12],b:[20,36,4,12],l:[0,36,4,12],r:[8,36,4,12],t:[4,32,4,4],m:[8,32,4,4]}
-};
-function armUV(w){return{f:[44,20,w,12],b:[52,20,w,12],l:[40,20,w,12],r:[48,20,w,12],t:[44,16,w,4],m:[48,16,w,4]}}
-function armOV(w){return{f:[44,52,w,12],b:[52,52,w,12],l:[40,52,w,12],r:[48,52,w,12],t:[44,48,w,4],m:[48,48,w,4]}}
-
-function v3(x,y,z){return{x,y,z}}
-function mxv(m,v){return v3(m[0]*v.x+m[1]*v.y+m[2]*v.z,m[3]*v.x+m[4]*v.y+m[5]*v.z,m[6]*v.x+m[7]*v.y+m[8]*v.z)}
-function rotY(a){let c=Math.cos(a),s=Math.sin(a);return[c,0,s,0,1,0,-s,0,c]}
-function rotX(a){let c=Math.cos(a),s=Math.sin(a);return[1,0,0,0,c,-s,0,s,c]}
-
-// Correct face winding: CCW when viewed from outside
-// Each face: [TL, TR, BR, BL] mapping to UV [TL, TR, BR, BL]
-const FACE_VTX = {
-  f:[0,1,2,3], b:[4,5,6,7], l:[4,0,3,7], r:[1,5,6,2], t:[4,5,1,0], m:[3,2,6,7]
-};
-
-function buildFaces(parts, texPixels, tw, isHd) {
-  let tris = [];
-  const inf = 0.5; // Outer-layer overlay inflation for 3D depth
-
-  for (const p of parts) {
-    const [cx,cy,cz]=p[0]; const [w,h,d]=p[1]; const u=p[2]; const ov=p[3];
-    const hw=w/2, hh=h/2, hd=d/2;
-
-    // Base inner layer vertices
-    const vt=[
-      v3(cx-hw,cy+hh,cz+hd),v3(cx+hw,cy+hh,cz+hd),v3(cx+hw,cy-hh,cz+hd),v3(cx-hw,cy-hh,cz+hd),
-      v3(cx-hw,cy+hh,cz-hd),v3(cx+hw,cy+hh,cz-hd),v3(cx+hw,cy-hh,cz-hd),v3(cx-hw,cy-hh,cz-hd)
-    ];
-
-    // Inflated outer layer vertices for 3D hat/jacket/sleeves/pants
-    const ohw=(w+inf)/2, ohh=(h+inf)/2, ohd=(d+inf)/2;
-    const ov_vt=[
-      v3(cx-ohw,cy+ohh,cz+ohd),v3(cx+ohw,cy+ohh,cz+ohd),v3(cx+ohw,cy-ohh,cz+ohd),v3(cx-ohw,cy-ohh,cz+ohd),
-      v3(cx-ohw,cy+ohh,cz-ohd),v3(cx+ohw,cy+ohh,cz-ohd),v3(cx+ohw,cy-ohh,cz-ohd),v3(cx-ohw,cy-ohh,cz-ohd)
-    ];
-
-    function addTri(targetVt, a, b, c, ua, ub, uc) {
-      tris.push({v:[targetVt[a],targetVt[b],targetVt[c]], uv:[ua,ub,uc], depth:0});
-    }
-
-    for (const [k,vi] of Object.entries(FACE_VTX)) {
-      if (!u[k]) continue;
-      const [ux,uy,uw,uh]=u[k];
-      const uv=[ [ux,uy],[ux+uw,uy],[ux+uw,uy+uh],[ux,uy+uh] ];
-      // Base layer triangles
-      addTri(vt, vi[0],vi[1],vi[2], uv[0],uv[1],uv[2]);
-      addTri(vt, vi[0],vi[2],vi[3], uv[0],uv[2],uv[3]);
-
-      // Outer layer overlay (hat, jacket, sleeves, pants)
-      if (isHd && ov && ov[k]) {
-        const [ox,oy,ow,oh]=ov[k];
-        let has=false;
-        for(let r=0; r<oh && !has; r++) {
-          for(let c=0; c<ow; c++) {
-            const idx = ((oy+r)*tw + (ox+c))*4 + 3;
-            if (texPixels[idx] > 128) { has=true; break; }
-          }
-        }
-        if (has) {
-          const ouv=[ [ox,oy],[ox+ow,oy],[ox+ow,oy+oh],[ox,oy+oh] ];
-          addTri(ov_vt, vi[0],vi[1],vi[2], ouv[0],ouv[1],ouv[2]);
-          addTri(ov_vt, vi[0],vi[2],vi[3], ouv[0],ouv[2],ouv[3]);
-        }
-      }
-    }
-  }
-  return tris;
-}
-
-function renderSkin3D(ctx, W, H, tw, th, texPixels, yaw, pitch, slim) {
-  ctx.clearRect(0,0,W,H);
-  const grad=ctx.createRadialGradient(W/2,200,2,W/2,200,55);
-  grad.addColorStop(0,'rgba(0,0,0,0.5)');grad.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=grad;ctx.beginPath();ctx.ellipse(W/2,204,55,10,0,0,Math.PI*2);ctx.fill();
-
-  const isHd = th === 64 || th === 128;
-  const w=slim?3:4, rU=armUV(w), rO=armOV(w);
-  const rAB=isHd?{f:[36,52,w,12],b:[36,52,w,12],l:[36,52,w,12],r:[36,52,w,12],t:[36,48,w,4],m:[40,48,w,4]}:rU;
-  const leg32={f:[4,20,4,12],b:[4,20,4,12],l:[4,20,4,12],r:[4,20,4,12],t:[4,16,4,4],m:[8,16,4,4]};
-  const rLB=isHd?{f:[20,52,4,12],b:[20,52,4,12],l:[20,52,4,12],r:[20,52,4,12],t:[20,48,4,4],m:[24,48,4,4]}:leg32;
-  const rLO=isHd?{f:[20,36,4,12],b:[20,36,4,12],l:[20,36,4,12],r:[20,36,4,12],t:[20,32,4,4],m:[24,32,4,4]}:null;
-  const rAO=isHd?{f:[52,52,w,12],b:[52,52,w,12],l:[52,52,w,12],r:[52,52,w,12],t:[52,48,w,4],m:[52,48,w,4]}:null;
-
-  const parts=[
-    [[0,28,0],[8,8,8],UV.head,UV.hat],
-    [[0,18,0],[8,12,4],UV.body,UV.jack],
-    [[-(slim?5.5:6),18,0],[w,12,4],rU,rO],
-    [[slim?5.5:6,18,0],[w,12,4],rAB,rAO],
-    [[-2,6,0],[4,12,4],isHd?UV.lleg:leg32,isHd?UV.llo:null],
-    [[2,6,0],[4,12,4],rLB,isHd?rLO:null]
-  ];
-
-  let tris=buildFaces(parts,texPixels,tw,isHd);
-  const my=rotY(yaw),mx=rotX(pitch);
-  for(const t of tris){
-    for(let i=0;i<3;i++){t.v[i]=mxv(my,mxv(mx,t.v[i]));t.depth+=t.v[i].z}
-    t.depth/=3;
-  }
-  tris.sort((a,b)=>b.depth-a.depth);
-
-  const out=ctx.getImageData(0,0,W,H);
-  const pix=out.data;
-  const fov=130,camZ=28,yOff=56;
-
-  function edge(e,px,py){return e[0]*(py+0.5-e[3])-e[1]*(px+0.5-e[2])}
-
-  for(const t of tris){
-    const sp=t.v.map(v=>{
-      const z=v.z+camZ;if(z<1)return null;
-      return {x:v.x*fov/z+W/2,y:-v.y*fov/z+H/2+yOff}
-    });
-    if(!sp[0]||!sp[1]||!sp[2])continue;
-    const uv=t.uv;
-
-    const bx0=Math.max(0,Math.floor(Math.min(sp[0].x,sp[1].x,sp[2].x)));
-    const bx1=Math.min(W-1,Math.ceil(Math.max(sp[0].x,sp[1].x,sp[2].x)));
-    const by0=Math.max(0,Math.floor(Math.min(sp[0].y,sp[1].y,sp[2].y)));
-    const by1=Math.min(H-1,Math.ceil(Math.max(sp[0].y,sp[1].y,sp[2].y)));
-    if(bx0>bx1||by0>by1)continue;
-
-    const eAB=[sp[1].x-sp[0].x,sp[1].y-sp[0].y,sp[0].x,sp[0].y];
-    const eBC=[sp[2].x-sp[1].x,sp[2].y-sp[1].y,sp[1].x,sp[1].y];
-    const eCA=[sp[0].x-sp[2].x,sp[0].y-sp[2].y,sp[2].x,sp[2].y];
-
-    for(let py=by0;py<=by1;py++){
-      for(let px=bx0;px<=bx1;px++){
-        const e0=edge(eBC,px,py),e1=edge(eCA,px,py),e2=edge(eAB,px,py);
-        const sum=e0+e1+e2;
-        if(sum===0)continue;
-        const u=e0/sum,v=e1/sum,w=e2/sum;
-        if(u < -0.001 || v < -0.001 || w < -0.001)continue;
-
-        const tu=(u*uv[0][0]+v*uv[1][0]+(1-u-v)*uv[2][0])/64;
-        const tv=(u*uv[0][1]+v*uv[1][1]+(1-u-v)*uv[2][1])/64;
-        const si=Math.min(tw-1,Math.max(0,Math.round(tu*tw)));
-        const sj=Math.min(th-1,Math.max(0,Math.round(tv*tw))); // tv*tw maps grid Y directly!
-        const ti=(sj*tw+si)*4;
-        if(texPixels[ti+3]>128){
-          const di=(py*W+px)*4;
-          pix[di]=texPixels[ti];pix[di+1]=texPixels[ti+1];pix[di+2]=texPixels[ti+2];pix[di+3]=255;
-        }
-      }
-    }
-  }
-  ctx.putImageData(out,0,0);
-}
+// === 3D Skin Viewer (skinview3d WebGL) ===
+let skinViewer = null;
 
 function startSkinViewer(canvas, img, modelType) {
   stopSkinViewer();
-
-  const tw = img.naturalWidth || 64, th = img.naturalHeight || 64;
-  const texC = document.createElement('canvas');
-  texC.width = tw; texC.height = th;
-  const tCtx = texC.getContext('2d');
-  tCtx.drawImage(img, 0, 0);
-  const texPixels = tCtx.getImageData(0, 0, tw, th).data;
-
-  sv={canvas,ctx:canvas.getContext('2d'),img,tw,th,texPixels,yaw:0.4,pitch:-0.15,slim:modelType==='slim',dragging:false,lx:0,ly:0};
-  sv.ctx.imageSmoothingEnabled=false;
-
-  function pt(e){return e.touches?{x:e.touches[0].clientX,y:e.touches[0].clientY}:{x:e.clientX,y:e.clientY}}
-  function onDown(e) {
-    const r=canvas.getBoundingClientRect();
-    sv.dragging=true;
-    sv.lx=pt(e).x-r.left;sv.ly=pt(e).y-r.top;
+  if (!window.skinview3d) {
+    console.error('skinview3d library not loaded');
+    return;
   }
-  function onMove(e) {
-    if(!sv.dragging)return;e.preventDefault();
-    const r=canvas.getBoundingClientRect();
-    const c=pt(e);
-    sv.yaw+=(c.x-sv.lx)*0.02;sv.pitch-=(c.y-sv.ly)*0.02;
-    sv.pitch=Math.max(-1.2,Math.min(1.2,sv.pitch));
-    sv.lx=c.x;sv.ly=c.y;
+
+  try {
+    skinViewer = new skinview3d.SkinViewer({
+      canvas: canvas,
+      width: canvas.clientWidth || 260,
+      height: canvas.clientHeight || 280,
+      skin: img.src,
+      model: modelType === 'slim' ? 'slim' : 'default'
+    });
+    skinViewer.controls.enableRotate = true;
+    skinViewer.controls.enableZoom = true;
+    skinViewer.controls.enablePan = false;
+    skinViewer.autoRotate = false;
+    skinViewer.fov = 70;
+    skinViewer.zoom = 0.9;
+  } catch (err) {
+    console.error('Failed to initialize skinview3d:', err);
   }
-  function onUp() {sv.dragging=false;}
+}
 
-  canvas.addEventListener('mousedown',onDown);
-  window.addEventListener('mousemove',onMove);
-  window.addEventListener('mouseup',onUp);
-  canvas.addEventListener('touchstart',onDown,{passive:true});
-  window.addEventListener('touchmove',onMove,{passive:false});
-  window.addEventListener('touchend',onUp);
-
-  function frame() {
-    if (!sv) return;
-    renderSkin3D(sv.ctx, canvas.width, canvas.height, sv.tw, sv.th, sv.texPixels, sv.yaw, sv.pitch, sv.slim);
-    svAnimId = requestAnimationFrame(frame);
+function stopSkinViewer() {
+  if (skinViewer) {
+    try {
+      skinViewer.dispose();
+    } catch {}
+    skinViewer = null;
   }
-  frame();
-
-  sv._cleanup=()=>{
-    canvas.removeEventListener('mousedown',onDown);
-    window.removeEventListener('mousemove',onMove);
-    window.removeEventListener('mouseup',onUp);
-    canvas.removeEventListener('touchstart',onDown);
-    window.removeEventListener('touchmove',onMove);
-    window.removeEventListener('touchend',onUp);
-  };
 }
 
 function stopSkinViewer() {
