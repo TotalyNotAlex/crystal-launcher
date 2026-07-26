@@ -5,8 +5,19 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 
 public class FPSElement {
+    private static long lastTime = System.currentTimeMillis();
+    private static int frames = 0;
+    private static int displayedFps = 0;
+
     public static void render(DrawContext context, int width, int height, ElementConfig cfg, MinecraftClient client) {
-        String text = "FPS: " + MinecraftClient.FPS_DEBUG_CURRENT;
+        frames++;
+        long now = System.currentTimeMillis();
+        if (now - lastTime > 1000) {
+            displayedFps = frames;
+            frames = 0;
+            lastTime = now;
+        }
+        String text = "FPS: " + displayedFps;
         int x = (int)(cfg.x * width);
         int y = (int)(cfg.y * height);
         context.getMatrices().push();

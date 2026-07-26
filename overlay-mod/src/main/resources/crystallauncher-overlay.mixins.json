@@ -6,7 +6,8 @@
   "client": [
     "InGameHudMixin",
     "GameMenuScreenMixin",
-    "MouseMixin"
+    "MouseMixin",
+    "ScreenAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

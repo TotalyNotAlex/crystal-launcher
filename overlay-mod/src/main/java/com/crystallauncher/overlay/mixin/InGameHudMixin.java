@@ -13,6 +13,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class InGameHudMixin {
     @Inject(method = "render", at = @At("HEAD"))
     public void onRender(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
-        HUDRenderer.render(context, tickCounter.getTickDelta(false));
+        HUDRenderer.render(context, tickCounter.lastFrameDuration);
     }
 }
