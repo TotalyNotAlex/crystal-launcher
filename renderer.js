@@ -85,7 +85,8 @@ checkOnline();
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    document.querySelectorAll('.modal.active').forEach((m) => m.classList.remove('active'));
+    document.querySelectorAll('.modal.active, .modal-overlay.active').forEach((m) => m.classList.remove('active'));
+    stopSkinViewer();
   }
   if (e.key === 'Enter') {
     const activeModSearch = $('mods-search-input')?.value;
@@ -1489,13 +1490,14 @@ function startSkinViewer(canvas, img, modelType) {
   }
 
   try {
-    skinViewer = new skinview3d.SkinViewer({
+    const options = {
       canvas: canvas,
       width: canvas.clientWidth || 260,
       height: canvas.clientHeight || 280,
-      skin: img.src,
       model: modelType === 'slim' ? 'slim' : 'default'
-    });
+    };
+    if (img) options.skin = img;
+    skinViewer = new skinview3d.SkinViewer(options);
     skinViewer.controls.enableRotate = true;
     skinViewer.controls.enableZoom = true;
     skinViewer.controls.enablePan = false;
@@ -1509,16 +1511,9 @@ function startSkinViewer(canvas, img, modelType) {
 
 function stopSkinViewer() {
   if (skinViewer) {
-    try {
-      skinViewer.dispose();
-    } catch {}
+    try { skinViewer.dispose(); } catch {}
     skinViewer = null;
   }
-}
-
-function stopSkinViewer() {
-  if (svAnimId) { cancelAnimationFrame(svAnimId); svAnimId = null; }
-  if (sv) { if (sv._cleanup) sv._cleanup(); sv = null; }
 }
 
 function loadSkinToPreview(skinName, base64Data) {
@@ -1530,20 +1525,7 @@ function loadSkinToPreview(skinName, base64Data) {
     stopSkinViewer();
     const tc = $('skin-texture-canvas');
     if(tc){const tctx=tc.getContext('2d');tctx.clearRect(0,0,tc.width,tc.height)}
-    const ctx = canvas.getContext('2d');
-    const W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-    const grad = ctx.createRadialGradient(W/2, 200, 2, W/2, 200, 55);
-    grad.addColorStop(0, 'rgba(0,0,0,0.5)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = grad; ctx.beginPath(); ctx.ellipse(W/2, 204, 55, 10, 0, 0, Math.PI*2); ctx.fill();
-    const slim = skinModelType === 'slim';
-    const w = slim ? 3 : 4, s = 8;
-    const ax = (W - (w*s + 8 + 8*s + 8 + w*s))/2, ay = (H - (64 + 8 + 96 + 8 + 96))/2 - 8;
-    const bx = ax + w*s + 8;
-    ctx.fillStyle = '#4a4a6a'; ctx.fillRect(bx, ay, 8*s, 8*s);
-    ctx.fillStyle = '#5a5a7a'; ctx.fillRect(bx, ay + 8*s + 8, 8*s, 12*s);
-    ctx.fillStyle = '#3a3a5a'; ctx.fillRect(ax, ay + 8*s + 8, w*s, 12*s); ctx.fillRect(bx + 8*s + 8, ay + 8*s + 8, w*s, 12*s);
-    ctx.fillStyle = '#4a4a6a'; ctx.fillRect(bx, ay + 8*s + 8 + 12*s + 8, 4*s, 12*s); ctx.fillRect(bx + 4*s + 8, ay + 8*s + 8 + 12*s + 8, 4*s, 12*s);
+    startSkinViewer(canvas, null, skinModelType);
     return;
   }
 
@@ -1705,8 +1687,9 @@ async function handleModelToggle(newModel) {
   $(`skin-model-${newModel}`).classList.add('active');
 
   const activeSkin = currentSkins.find((s) => s.name === activeSkinName);
-  if (sv && sv.img) {
-    startSkinViewer($('skin-preview-canvas'), sv.img, skinModelType);
+  if (skinViewer) {
+    const canvas = $('skin-preview-canvas');
+    startSkinViewer(canvas, null, skinModelType);
   } else {
     loadSkinToPreview(activeSkinName, activeSkin?.data);
   }
