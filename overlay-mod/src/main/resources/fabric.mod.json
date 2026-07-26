@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "crystallauncher-overlay",
+  "version": "${version}",
+  "name": "Crystal Launcher Overlay",
+  "description": "HUD overlay with FPS, Ping, CPS, and Coordinates for Crystal Launcher",
+  "authors": ["Crystal Launcher"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/crystallauncher-overlay/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "main": ["com.crystallauncher.overlay.CrystalOverlayMod"]
+  },
+  "mixins": ["crystallauncher-overlay.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "fabric-api": "*",
+    "minecraft": ">=1.20.4"
+  }
+}

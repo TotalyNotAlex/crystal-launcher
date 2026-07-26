@@ -149,6 +149,19 @@ class LaunchService {
     }
   }
 
+  installOverlayMod(mcVersion) {
+    const modsDir = path.join(this.gameDir, 'mods');
+    if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir, { recursive: true });
+    const launcherResources = path.join(app ? app.getPath('exe') : __dirname, '..', 'resources');
+    const overlayJar = path.join(launcherResources, 'crystallauncher-overlay.jar');
+    if (!fs.existsSync(overlayJar)) {
+      console.warn('Overlay mod JAR not found at', overlayJar);
+      return;
+    }
+    const target = path.join(modsDir, 'crystallauncher-overlay.jar');
+    try { fs.copyFileSync(overlayJar, target); console.log('Overlay mod installed to', target); } catch (err) { console.warn('Failed to install overlay mod:', err.message); }
+  }
+
   async launchGame(profile, account, onProgress, onStatus, onLog, onRunning, onExit) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -213,6 +226,7 @@ class LaunchService {
           if (onStatus) onStatus(`Fetching Fabric for ${mcVersion}...`);
           const fabric = await this.ensureFabricVersionManifest(mcVersion, profile.loaderVersion);
           opts.version.custom = fabric.name;
+          this.installOverlayMod(mcVersion);
         } else if (loaderType === 'forge') {
           if (onStatus) onStatus(`Preparing Forge for ${mcVersion}...`);
           const forge = await this.ensureForgeVersion(mcVersion);
