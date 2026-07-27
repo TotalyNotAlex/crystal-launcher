@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const CURRENT_VERSION = '1.4.6';
+const CURRENT_VERSION = '1.4.8';
 let manifestPath = '';
 
 class UpdateService {
@@ -42,7 +42,7 @@ class UpdateService {
         body: res.data.body || '',
       };
     } catch (err) {
-      const msg = err?.response?.status === 403 ? 'API rate limited — try again later' : (err?.message || 'Network error');
+      const msg = err?.response?.status === 403 ? 'API rate limited â€” try again later' : (err?.message || 'Network error');
       return { hasUpdate: false, version: CURRENT_VERSION, currentVersion: CURRENT_VERSION, url: '', downloadUrl: '', body: '', error: msg };
     }
   }
