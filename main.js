@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
@@ -377,7 +377,7 @@ function getPlaytimeSessions() {
 }
 
 ipcMain.handle('check-updates', async () => updateService.checkForUpdates());
-ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return '1.4.5'; } });
+ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return '1.4.6'; } });
 
 ipcMain.handle('get-saved-skins', async () => {
   const skinDir = path.join(baseDataDir, 'skins');
