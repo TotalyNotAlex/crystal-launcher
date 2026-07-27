@@ -186,12 +186,11 @@ app.whenReady().then(() => {
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
   const updatedFile = path.join(baseDataDir, '.updated');
   if (fs.existsSync(updatedFile)) {
-    try { fs.unlinkSync(updatedFile); } catch {}
+    try { fs.unlinkSync(updatedFile); } catch (e) { console.warn('Could not delete .updated file:', e.message); }
   }
 
   async function checkUpdate() {
     try {
-      if (fs.existsSync(updatedFile)) return;
       const update = await updateService.checkForUpdates();
       if (update.hasUpdate && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-available', update);
@@ -378,7 +377,7 @@ function getPlaytimeSessions() {
 }
 
 ipcMain.handle('check-updates', async () => updateService.checkForUpdates());
-ipcMain.handle('get-app-version', async () => { try { return require(path.join(__dirname, 'package.json')).version; } catch { return '1.0.3'; } });
+ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return '1.4.0'; } });
 
 ipcMain.handle('get-saved-skins', async () => {
   const skinDir = path.join(baseDataDir, 'skins');

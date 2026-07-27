@@ -6,7 +6,9 @@ const distDir = path.join(__dirname, 'dist');
 let setupExe = '';
 if (fs.existsSync(distDir)) {
   const files = fs.readdirSync(distDir).filter(f => f.endsWith('.exe') && f.includes('Setup'));
-  if (files.length > 0) setupExe = path.resolve(distDir, files[0]);
+  const match = files.find(f => f.includes(pkg.version));
+  if (match) setupExe = path.resolve(distDir, match);
+  else if (files.length > 0) setupExe = path.resolve(distDir, files[files.length - 1]);
 }
 const buildId = Date.now();
 const manifest = { version: pkg.version, buildId, downloadUrl: setupExe, body: 'New build available' };
