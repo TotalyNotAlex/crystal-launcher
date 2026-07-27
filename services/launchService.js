@@ -152,8 +152,9 @@ class LaunchService {
   installOverlayMod(mcVersion) {
     const modsDir = path.join(this.gameDir, 'mods');
     if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir, { recursive: true });
-    const launcherResources = path.join(app ? app.getPath('exe') : __dirname, '..', 'resources');
-    const overlayJar = path.join(launcherResources, 'crystallauncher-overlay.jar');
+    const overlayJar = typeof process !== 'undefined' && process.resourcesPath
+      ? path.join(process.resourcesPath, 'crystallauncher-overlay.jar')
+      : path.join(__dirname, '..', 'resources', 'crystallauncher-overlay.jar');
     if (!fs.existsSync(overlayJar)) {
       console.warn('Overlay mod JAR not found at', overlayJar);
       return;
