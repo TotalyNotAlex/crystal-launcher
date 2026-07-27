@@ -1,6 +1,6 @@
 {
   "name": "crystal-launcher",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "description": "A sleek, modern Minecraft launcher with Microsoft auth, mod loader support, and profile management.",
   "main": "main.js",
   "scripts": {
@@ -35,7 +35,10 @@
       "**/*"
     ],
     "extraResources": [
-      { "from": "resources/crystallauncher-overlay.jar", "to": "crystallauncher-overlay.jar" }
+      {
+        "from": "resources/crystallauncher-overlay.jar",
+        "to": "crystallauncher-overlay.jar"
+      }
     ],
     "win": {
       "target": [
