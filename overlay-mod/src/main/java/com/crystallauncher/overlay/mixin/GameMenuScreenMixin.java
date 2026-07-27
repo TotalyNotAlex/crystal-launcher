@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GameMenuScreen.class)
 public class GameMenuScreenMixin {
-    @Inject(method = "initWidgets", at = @At("TAIL"))
+    @Inject(method = "init", at = @At("TAIL"))
     private void addOverlaySettingsButton(CallbackInfo ci) {
         GameMenuScreen self = (GameMenuScreen)(Object)this;
         ButtonWidget btn = ButtonWidget.builder(
