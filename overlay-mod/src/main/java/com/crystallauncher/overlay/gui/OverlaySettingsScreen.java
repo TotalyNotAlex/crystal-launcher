@@ -5,7 +5,7 @@ import com.crystallauncher.overlay.config.OverlayConfig;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.screen.ScreenTexts;
+
 import net.minecraft.text.Text;
 
 public class OverlaySettingsScreen extends Screen {
@@ -53,7 +53,7 @@ public class OverlaySettingsScreen extends Screen {
         addDrawableChild(cpsBtn);
         addDrawableChild(coordsBtn);
 
-        addDrawableChild(ButtonWidget.builder(ScreenTexts.DONE, btn -> {
+        addDrawableChild(ButtonWidget.builder(Text.translatable("gui.done"), btn -> {
             ConfigManager.apply(config);
             if (this.client != null) this.client.setScreen(parent);
         }).dimensions(this.width / 2 - 100, this.height - 40, 200, 20).build());
