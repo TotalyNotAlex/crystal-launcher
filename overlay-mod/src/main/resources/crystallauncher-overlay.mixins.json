@@ -1,11 +1,10 @@
 {
-  "required": true,
+  "required": false,
   "minVersion": "0.8",
   "package": "com.crystallauncher.overlay.mixin",
   "compatibilityLevel": "JAVA_17",
   "client": [
     "InGameHudMixin",
-    "MouseMixin",
     "ClientTickMixin",
     "GameMenuScreenMixin",
     "ScreenAccessor"
