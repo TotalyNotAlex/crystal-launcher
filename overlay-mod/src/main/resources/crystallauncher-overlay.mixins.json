@@ -5,9 +5,8 @@
   "compatibilityLevel": "JAVA_17",
   "client": [
     "InGameHudMixin",
-    "GameMenuScreenMixin",
     "MouseMixin",
-    "ScreenAccessor"
+    "ClientTickMixin"
   ],
   "injectors": {
     "defaultRequire": 1

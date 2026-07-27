@@ -1794,7 +1794,7 @@ function showUpdateDialog(update) {
     <div class="update-dialog">
       <div class="update-icon"><svg viewBox="0 0 24 24" width="48" height="48"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-2h2v2zm0-4H9V7h2v6z" fill="var(--accent)"/></svg></div>
       <div class="update-title">Update ${update.version} available!</div>
-      <div class="update-msg">Current version: ${update.currentVersion || '1.4.1'}</div>
+      <div class="update-msg">Current version: ${update.currentVersion || '1.4.2'}</div>
       <div class="update-actions">
         <button class="btn btn-secondary" id="btn-update-later">Later</button>
         <button class="btn btn-primary" id="btn-update-now">Update & Restart</button>
