@@ -377,7 +377,7 @@ function getPlaytimeSessions() {
 }
 
 ipcMain.handle('check-updates', async () => updateService.checkForUpdates());
-ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return '1.4.0'; } });
+ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return '1.4.3'; } });
 
 ipcMain.handle('get-saved-skins', async () => {
   const skinDir = path.join(baseDataDir, 'skins');
