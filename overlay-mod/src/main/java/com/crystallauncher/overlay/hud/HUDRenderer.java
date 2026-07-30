@@ -1,34 +1,40 @@
 package com.crystallauncher.overlay.hud;
 
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import com.crystallauncher.overlay.config.ConfigManager;
 import com.crystallauncher.overlay.config.OverlayConfig;
 import com.crystallauncher.overlay.hud.elements.*;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
 
 public class HUDRenderer {
-    private final MinecraftClient client;
-    private final FPSElement fpsElement = new FPSElement();
-    private final PingElement pingElement = new PingElement();
-    private final CPSElement cpsElement = new CPSElement();
-    private final CoordsElement coordsElement = new CoordsElement();
+    private static final FPSElement fpsElement = new FPSElement();
+    private static final PingElement pingElement = new PingElement();
+    private static final CPSElement cpsElement = new CPSElement();
+    private static final CoordsElement coordsElement = new CoordsElement();
 
-    public HUDRenderer(MinecraftClient client) {
-        this.client = client;
-    }
+    public static void render(GuiGraphics graphics) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.options.hideGui) {
+            return;
+        }
 
-    public void render(DrawContext context, float tickDelta) {
-        if (client.player == null || client.options.hudHidden) return;
         OverlayConfig cfg = ConfigManager.getConfig();
-        if (!cfg.enabled) return;
+        if (!cfg.enabled) {
+            return;
+        }
 
-        if (cfg.fps.enabled) fpsElement.render(context, client, cfg.fps);
-        if (cfg.ping.enabled) pingElement.render(context, client, cfg.ping);
-        if (cfg.cps.enabled) cpsElement.render(context, client, cfg.cps);
-        if (cfg.coords.enabled) coordsElement.render(context, client, cfg.coords);
-    }
-
-    public void tick() {
-        cpsElement.tick();
+        // Avoid rendering when F3 debug screen is active if that's desired, but let's render it over normal HUD.
+        if (cfg.fps.enabled) {
+            fpsElement.render(graphics, cfg.fps);
+        }
+        if (cfg.ping.enabled) {
+            pingElement.render(graphics, cfg.ping);
+        }
+        if (cfg.cps.enabled) {
+            cpsElement.render(graphics, cfg.cps);
+        }
+        if (cfg.coords.enabled) {
+            coordsElement.render(graphics, cfg.coords);
+        }
     }
 }

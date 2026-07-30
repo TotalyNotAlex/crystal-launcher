@@ -2,21 +2,21 @@ package com.crystallauncher.overlay.config;
 
 public class OverlayConfig {
     public boolean enabled = true;
-    public ElementConfig fps = new ElementConfig(true, 0.92f, 0.01f, 0xFFFFFF, 1.0f);
-    public ElementConfig ping = new ElementConfig(true, 0.92f, 0.05f, 0xFFFFFF, 1.0f);
-    public ElementConfig cps = new ElementConfig(true, 0.92f, 0.09f, 0xFFFFFF, 1.0f);
-    public ElementConfig coords = new ElementConfig(true, 0.01f, 0.92f, 0xFFFFFF, 1.0f);
+    public ElementConfig fps = new ElementConfig(true, 350, 10, 0xFFFFFF, 1.0f);
+    public ElementConfig ping = new ElementConfig(true, 350, 25, 0xFFFFFF, 1.0f);
+    public ElementConfig cps = new ElementConfig(true, 350, 40, 0xFFFFFF, 1.0f);
+    public ElementConfig coords = new ElementConfig(true, 350, 55, 0xFFFFFF, 1.0f);
 
     public static class ElementConfig {
         public boolean enabled;
-        public float x;
-        public float y;
+        public int x;
+        public int y;
         public int color;
         public float scale;
 
         public ElementConfig() {}
 
-        public ElementConfig(boolean enabled, float x, float y, int color, float scale) {
+        public ElementConfig(boolean enabled, int x, int y, int color, float scale) {
             this.enabled = enabled;
             this.x = x;
             this.y = y;

@@ -3,16 +3,21 @@
   "id": "crystallauncher-overlay",
   "version": "1.0.0",
   "name": "Crystal Launcher Overlay",
-  "description": "HUD overlay with FPS, Ping, CPS, and Coordinates",
+  "description": "Feather-style client overlay mod with customizable modules",
   "authors": ["Crystal Launcher"],
   "license": "MIT",
   "environment": "client",
   "entrypoints": {
-    "main": ["com.crystallauncher.overlay.CrystalOverlayMod"]
+    "client": [
+      "com.crystallauncher.overlay.CrystalOverlayMod"
+    ]
   },
-  "mixins": ["crystallauncher-overlay.mixins.json"],
+  "mixins": [
+    "crystallauncher-overlay.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.15.0",
-    "minecraft": "*"
+    "minecraft": "1.21.11",
+    "fabric-api": "*"
   }
 }
