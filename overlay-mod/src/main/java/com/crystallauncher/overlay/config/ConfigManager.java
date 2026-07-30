@@ -33,9 +33,17 @@ public class ConfigManager {
                     config = OverlayConfig.createDefault();
                 }
                 LOGGER.info("Overlay config loaded from {}", configPath);
-            } catch (IOException e) {
-                LOGGER.error("Failed to load overlay config", e);
+            } catch (Exception e) {
+                // Catch any JsonSyntaxException, NumberFormatException or IOException
+                LOGGER.error("Failed to parse overlay config due to old/incompatible format. Resetting to defaults.", e);
+                
+                // Safely delete the incompatible config file to avoid future crashes
+                try {
+                    configPath.toFile().delete();
+                } catch (Exception ignored) {}
+                
                 config = OverlayConfig.createDefault();
+                save();
             }
         } else {
             config = OverlayConfig.createDefault();
