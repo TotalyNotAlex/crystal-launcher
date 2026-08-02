@@ -6,6 +6,7 @@ public class OverlayConfig {
     public ElementConfig ping = new ElementConfig(true, 350, 25, 0xFFFFFF, 1.0f);
     public ElementConfig cps = new ElementConfig(true, 350, 40, 0xFFFFFF, 1.0f);
     public ElementConfig coords = new ElementConfig(true, 350, 55, 0xFFFFFF, 1.0f);
+    public ElementConfig biome = new ElementConfig(true, 350, 70, 0xFFFFFF, 1.0f);
 
     public static class ElementConfig {
         public boolean enabled;
@@ -36,6 +37,7 @@ public class OverlayConfig {
         c.ping = this.ping.copy();
         c.cps = this.cps.copy();
         c.coords = this.coords.copy();
+        c.biome = this.biome.copy();
         return c;
     }
 

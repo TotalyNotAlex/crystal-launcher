@@ -44,11 +44,19 @@ public class OverlaySettingsScreen extends Screen {
     private IntSlider coordsYSlider;
     private ScaleSlider coordsScaleSlider;
 
+    // Row 5: Biome
+    private Button biomeToggle;
+    private Button biomeColorBtn;
+    private IntSlider biomeXSlider;
+    private IntSlider biomeYSlider;
+    private ScaleSlider biomeScaleSlider;
+
     // Preview Renderers
     private final FPSElement fpsRenderer = new FPSElement();
     private final PingElement pingRenderer = new PingElement();
     private final CPSElement cpsRenderer = new CPSElement();
     private final CoordsElement coordsRenderer = new CoordsElement();
+    private final BiomeElement biomeRenderer = new BiomeElement();
 
     public OverlaySettingsScreen(Screen parent) {
         super(Component.literal("Overlay Settings"));
@@ -154,23 +162,46 @@ public class OverlaySettingsScreen extends Screen {
         this.addRenderableWidget(coordsYSlider);
         this.addRenderableWidget(coordsScaleSlider);
 
+        // --- ROW 5: BIOME ---
+        int biomeY = coordsY + rowHeight;
+        biomeToggle = Button.builder(Component.literal(config.biome.enabled ? "ON" : "OFF"), btn -> {
+            config.biome.enabled = !config.biome.enabled;
+            btn.setMessage(Component.literal(config.biome.enabled ? "ON" : "OFF"));
+        }).bounds(centerX - 160, biomeY, 40, 20).build();
+
+        biomeColorBtn = Button.builder(Component.literal("Color"), btn -> {
+            if (this.minecraft != null) {
+                this.minecraft.setScreen(new ColorPickerScreen(this, config.biome.color, col -> config.biome.color = col));
+            }
+        }).bounds(centerX - 115, biomeY, 45, 20).build();
+
+        biomeXSlider = new IntSlider(centerX - 65, biomeY, 70, 20, "X", config.biome.x, this.width, val -> config.biome.x = val);
+        biomeYSlider = new IntSlider(centerX + 15, biomeY, 70, 20, "Y", config.biome.y, this.height, val -> config.biome.y = val);
+        biomeScaleSlider = new ScaleSlider(centerX + 95, biomeY, 70, 20, "Scale", config.biome.scale, val -> config.biome.scale = val);
+
+        this.addRenderableWidget(biomeToggle);
+        this.addRenderableWidget(biomeColorBtn);
+        this.addRenderableWidget(biomeXSlider);
+        this.addRenderableWidget(biomeYSlider);
+        this.addRenderableWidget(biomeScaleSlider);
+
         // --- PRESETS ---
-        int presetY = coordsY + 28;
-        this.addRenderableWidget(Button.builder(Component.literal("Top Left"), btn -> applyPreset(10, 10, 10, 25, 10, 40, 10, 55)).bounds(centerX - 200, presetY, 70, 20).build());
+        int presetY = biomeY + 28;
+        this.addRenderableWidget(Button.builder(Component.literal("Top Left"), btn -> applyPreset(10, 10, 10, 25, 10, 40, 10, 55, 10, 70)).bounds(centerX - 200, presetY, 70, 20).build());
         this.addRenderableWidget(Button.builder(Component.literal("Top Right"), btn -> {
             int rx = this.width - 110;
-            applyPreset(rx, 10, rx, 25, rx, 40, rx, 55);
+            applyPreset(rx, 10, rx, 25, rx, 40, rx, 55, rx, 70);
         }).bounds(centerX - 125, presetY, 75, 20).build());
         this.addRenderableWidget(Button.builder(Component.literal("Bottom Left"), btn -> {
-            int by = this.height - 75;
-            applyPreset(10, by, 10, by + 15, 10, by + 30, 10, by + 45);
+            int by = this.height - 90;
+            applyPreset(10, by, 10, by + 15, 10, by + 30, 10, by + 45, 10, by + 60);
         }).bounds(centerX - 45, presetY, 80, 20).build());
         this.addRenderableWidget(Button.builder(Component.literal("Bottom Right"), btn -> {
             int rx = this.width - 110;
-            int by = this.height - 75;
-            applyPreset(rx, by, rx, by + 15, rx, by + 30, rx, by + 45);
+            int by = this.height - 90;
+            applyPreset(rx, by, rx, by + 15, rx, by + 30, rx, by + 45, rx, by + 60);
         }).bounds(centerX + 40, presetY, 85, 20).build());
-        this.addRenderableWidget(Button.builder(Component.literal("Reset Positions"), btn -> applyPreset(350, 10, 350, 25, 350, 40, 350, 55)).bounds(centerX + 130, presetY, 100, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("Reset Positions"), btn -> applyPreset(350, 10, 350, 25, 350, 40, 350, 55, 350, 70)).bounds(centerX + 130, presetY, 100, 20).build());
 
         // --- BOTTOM ACTIONS ---
         int bottomY = presetY + 26;
@@ -188,14 +219,16 @@ public class OverlaySettingsScreen extends Screen {
             pingToggle.setMessage(Component.literal(config.ping.enabled ? "ON" : "OFF"));
             cpsToggle.setMessage(Component.literal(config.cps.enabled ? "ON" : "OFF"));
             coordsToggle.setMessage(Component.literal(config.coords.enabled ? "ON" : "OFF"));
+            biomeToggle.setMessage(Component.literal(config.biome.enabled ? "ON" : "OFF"));
         }).bounds(centerX + 5, bottomY, 100, 20).build());
     }
 
-    private void applyPreset(int fx, int fy, int px, int py, int cx, int cy, int cox, int coy) {
+    private void applyPreset(int fx, int fy, int px, int py, int cx, int cy, int cox, int coy, int bx, int by) {
         config.fps.x = fx; config.fps.y = fy;
         config.ping.x = px; config.ping.y = py;
         config.cps.x = cx; config.cps.y = cy;
         config.coords.x = cox; config.coords.y = coy;
+        config.biome.x = bx; config.biome.y = by;
         refreshSliders();
     }
 
@@ -215,6 +248,10 @@ public class OverlaySettingsScreen extends Screen {
         coordsXSlider.updateValue(config.coords.x);
         coordsYSlider.updateValue(config.coords.y);
         coordsScaleSlider.updateValue(config.coords.scale);
+
+        biomeXSlider.updateValue(config.biome.x);
+        biomeYSlider.updateValue(config.biome.y);
+        biomeScaleSlider.updateValue(config.biome.scale);
     }
 
     @Override
@@ -229,6 +266,7 @@ public class OverlaySettingsScreen extends Screen {
         graphics.drawString(this.font, "Ping", centerX - 200, 66, 0xFFFFFF, false);
         graphics.drawString(this.font, "CPS", centerX - 200, 91, 0xFFFFFF, false);
         graphics.drawString(this.font, "Coords", centerX - 200, 116, 0xFFFFFF, false);
+        graphics.drawString(this.font, "Biome", centerX - 200, 141, 0xFFFFFF, false);
 
         super.render(graphics, mouseX, mouseY, delta);
 
@@ -238,6 +276,7 @@ public class OverlaySettingsScreen extends Screen {
             if (config.ping.enabled) pingRenderer.render(graphics, config.ping);
             if (config.cps.enabled) cpsRenderer.render(graphics, config.cps);
             if (config.coords.enabled) coordsRenderer.render(graphics, config.coords);
+            if (config.biome.enabled) biomeRenderer.render(graphics, config.biome);
         }
     }
 

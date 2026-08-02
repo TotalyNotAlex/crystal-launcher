@@ -11,6 +11,7 @@ public class HUDRenderer {
     private static final PingElement pingElement = new PingElement();
     private static final CPSElement cpsElement = new CPSElement();
     private static final CoordsElement coordsElement = new CoordsElement();
+    private static final BiomeElement biomeElement = new BiomeElement();
 
     public static void render(GuiGraphics graphics) {
         Minecraft mc = Minecraft.getInstance();
@@ -23,7 +24,6 @@ public class HUDRenderer {
             return;
         }
 
-        // Avoid rendering when F3 debug screen is active if that's desired, but let's render it over normal HUD.
         if (cfg.fps.enabled) {
             fpsElement.render(graphics, cfg.fps);
         }
@@ -35,6 +35,9 @@ public class HUDRenderer {
         }
         if (cfg.coords.enabled) {
             coordsElement.render(graphics, cfg.coords);
+        }
+        if (cfg.biome.enabled) {
+            biomeElement.render(graphics, cfg.biome);
         }
     }
 }

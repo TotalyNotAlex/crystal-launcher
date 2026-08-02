@@ -25,7 +25,11 @@ public class CoordsElement implements HUDElement {
         graphics.pose().pushMatrix();
         graphics.pose().translate((float) cfg.x, (float) cfg.y);
         graphics.pose().scale(cfg.scale, cfg.scale);
-        graphics.fill(-2, -2, width + 2, 10, 0x80000000);
+        
+        // Draw modern background with left colored accent bar
+        graphics.fill(-4, -2, width + 2, 10, 0x80000000);
+        graphics.fill(-4, -2, -2, 10, opaqueColor);
+        
         graphics.drawString(font, text, 0, 0, opaqueColor, true);
         graphics.pose().popMatrix();
     }
