@@ -22,7 +22,7 @@
   "play.started": "Game Started!",
   "play.started_msg": "Minecraft {version} launched.",
   "play.error": "Launch Error",
-  "play.java_not_found": "Java not found. Please install Java 17 or later from adoptium.net",
+  "play.java_not_found": "Java 21 not found. It will be downloaded automatically before launch",
   "play.prepare": "Preparing...",
 
   "mods.browse": "Browse",
@@ -106,7 +106,8 @@
   "settings.java": "Java Runtime",
   "settings.java_found": "Java {version} found",
   "settings.java_not_found": "Java not found",
-  "settings.java_download": "Download Java 17+",
+  "settings.java_download": "Download Java 21+",
+  "settings.java_path_placeholder": "Custom Java path (optional)",
   "settings.memory": "Memory",
   "settings.jvm": "JVM Flags",
   "settings.folders": "Folders",

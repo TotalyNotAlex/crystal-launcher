@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
 
   checkJava: () => ipcRenderer.invoke('check-java'),
   installJava: () => ipcRenderer.invoke('install-java'),
+  browseJava: () => ipcRenderer.invoke('browse-java'),
   onJavaInstallProgress: (cb) => ipcRenderer.on('java-install-progress', (e, d) => cb(d)),
 
   getSettings: () => ipcRenderer.invoke('get-settings'),

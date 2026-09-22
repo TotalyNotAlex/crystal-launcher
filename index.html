@@ -394,7 +394,11 @@
             <div class="settings-group">
               <h3 class="group-title" data-i18n="settings.java">Java Runtime</h3>
               <div id="java-status" class="java-status">Checking...</div>
-              <button class="btn btn-secondary" id="java-install-btn" style="font-size:11px;padding:4px 12px;width:fit-content;">Install Java 17</button>
+              <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
+                <input type="text" id="input-java-path" class="jvm-input" placeholder="Custom Java path (optional)" spellcheck="false" style="flex:1;min-width:0;" data-i18n-placeholder="settings.java_path_placeholder">
+                <button class="btn btn-secondary" id="java-browse-btn" style="font-size:11px;padding:4px 10px;">Browse</button>
+              </div>
+              <button class="btn btn-secondary" id="java-install-btn" style="font-size:11px;padding:4px 12px;width:fit-content;">Install Java 21</button>
             </div>
 
             <div class="settings-group">

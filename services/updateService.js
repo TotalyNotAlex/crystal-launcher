@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const CURRENT_VERSION = '1.4.14';
+const CURRENT_VERSION = '1.4.15';
 let manifestPath = '';
 
 class UpdateService {
@@ -74,7 +74,7 @@ class UpdateService {
   async installUpdate(updatePath) {
     const ext = path.extname(updatePath).toLowerCase();
     if (ext === '.exe') {
-      execSync(`"${updatePath}" /S`, { timeout: 5000 });
+      execSync(`"${updatePath}" /S`, { timeout: 5000, windowsHide: true });
       return true;
     }
     return false;

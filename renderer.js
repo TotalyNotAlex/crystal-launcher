@@ -137,7 +137,7 @@ function toast(title, msg, type = 'success', duration = 7000) {
 
 function saveSettings() {
   const accent = document.querySelector('.accent-swatch.active')?.dataset.color || $('accent-custom')?.value || '#6c8cff';
-  window.api.saveSettings({ activeAccountId, activeProfileId, lastLoader: currentLoader, lastVersion: currentVersion, defaultRam: currentRam, jvmArgs: currentJvm, keepLauncherOpen: currentKeepOpen, language: currentLang, discordRpc: $('toggle-rpc')?.checked ?? true, accentColor: accent });
+  window.api.saveSettings({ activeAccountId, activeProfileId, lastLoader: currentLoader, lastVersion: currentVersion, defaultRam: currentRam, jvmArgs: currentJvm, keepLauncherOpen: currentKeepOpen, language: currentLang, discordRpc: $('toggle-rpc')?.checked ?? true, accentColor: accent, javaPath: ($('input-java-path')?.value || '').trim() });
 }
 
 async function updateActiveProfile() {
@@ -1096,11 +1096,38 @@ $('btn-console-tab-crashes').onclick = async function () {
 };
 
 // Settings
+function showJavaStatus(java) {
+  const el = $('java-status');
+  if (!el) return;
+  if (java && java.found) {
+    el.innerHTML = `<span style="color:var(--success)">&#9679;</span> ${t('settings.java_found', { version: java.version })} (64-bit)`;
+  } else if (java && java.version) {
+    el.innerHTML = `<span style="color:var(--danger)">&#9679;</span> Java ${java.version} found but Java 21+ is required${java.reason ? ` — ${java.reason}` : ''} <button class="btn btn-secondary" id="java-install-btn-dyn" style="font-size:10px;padding:2px 8px;margin-left:6px;">Install Java 21</button>`;
+    const dyn = document.getElementById('java-install-btn-dyn');
+    if (dyn) dyn.onclick = () => $('java-install-btn')?.click();
+  } else {
+    el.innerHTML = `<span style="color:var(--danger)">&#9679;</span> ${t('settings.java_not_found')} — Java 21+ will be downloaded on Play`;
+  }
+}
+
 function initSettings() {
   document.querySelectorAll('.ram-btn').forEach((btn) => {
     btn.onclick = () => { currentRam = parseInt(btn.dataset.ram); document.querySelectorAll('.ram-btn').forEach((b) => b.classList.toggle('active', parseInt(b.dataset.ram) === currentRam)); saveSettings(); toast(t('settings.ram_saved'), t('settings.ram_msg', { ram: currentRam })); };
   });
   $('input-jvm').onchange = () => { currentJvm = $('input-jvm').value.trim(); saveSettings(); toast(t('settings.jvm_saved'), ''); };
+  const javaPathInput = $('input-java-path');
+  if (javaPathInput) {
+    javaPathInput.onchange = () => { saveSettings(); window.api.checkJava().then(showJavaStatus); };
+  }
+  $('java-browse-btn')?.addEventListener('click', async () => {
+    const picked = await window.api.browseJava();
+    if (picked && javaPathInput) {
+      javaPathInput.value = picked;
+      saveSettings();
+      window.api.checkJava().then(showJavaStatus);
+      toast(t('toast.saved'), picked);
+    }
+  });
   $('toggle-keep').onchange = function () { currentKeepOpen = this.checked; saveSettings(); };
   $('toggle-rpc').onchange = function () { window.api.toggleRpc(this.checked); saveSettings(); };
   $('btn-game-folder').onclick = () => window.api.openGameFolder();
@@ -1146,16 +1173,16 @@ function initSettings() {
 
   $('java-install-btn')?.addEventListener('click', async function () {
     this.disabled = true; this.textContent = t('play.launching');
-    $('java-status').innerHTML = `<span style="color:var(--accent)">&#9679;</span> Downloading Java 17... <span id="java-dl-pct">0%</span>`;
+    $('java-status').innerHTML = `<span style="color:var(--accent)">&#9679;</span> Downloading Java 21... <span id="java-dl-pct">0%</span>`;
     const result = await window.api.installJava();
     if (result.success) {
-      $('java-status').innerHTML = `<span style="color:var(--success)">&#9679;</span> ${t('settings.java_found', { version: '17' })} (auto-installed)`;
-      toast(t('toast.saved'), 'Java 17 installed');
+      $('java-status').innerHTML = `<span style="color:var(--success)">&#9679;</span> ${t('settings.java_found', { version: '21' })} (auto-installed)`;
+      toast(t('toast.saved'), 'Java 21 installed');
     } else {
       $('java-status').innerHTML = `<span style="color:var(--danger)">&#9679;</span> Java download failed: ${result.error} <button class="btn btn-secondary" id="java-install-btn" style="font-size:10px;padding:2px 8px;margin-left:6px;">Retry</button>`;
       toast(t('toast.error'), result.error, 'error');
     }
-    this.disabled = false; this.textContent = 'Install';
+    this.disabled = false; this.textContent = 'Install Java 21';
   });
 }
 
@@ -1164,7 +1191,7 @@ $('btn-play').onclick = async function () {
   this.disabled = true; this.textContent = t('play.launching');
   const pc = $('progress-container');
   pc.classList.add('active');
-  $('progress-text').textContent = 'Preparing...';
+  $('progress-text').textContent = 'Checking Java 21+...';
   $('progress-fill').style.width = '0%';
 
   let launchProfile = profiles.find((p) => p.id === activeProfileId);
@@ -1175,10 +1202,28 @@ $('btn-play').onclick = async function () {
   const pcText = $('progress-text');
   try {
     if (!isOffline) {
+      pcText.textContent = 'Checking Java 21+...';
+      const javaCheck = await window.api.checkJava();
+      if (!javaCheck.found) {
+        pcText.textContent = javaCheck.needsInstall && javaCheck.version
+          ? `Java ${javaCheck.version} is too old — downloading Java 21...`
+          : 'Java 21 not found — downloading...';
+        const installResult = await window.api.installJava();
+        if (!installResult.success) {
+          throw new Error(installResult.error || 'Java 21 download failed');
+        }
+        $('java-status').innerHTML = `<span style="color:var(--success)">&#9679;</span> ${t('settings.java_found', { version: '21' })} (auto-installed)`;
+      }
       pcText.textContent = `Ensuring Minecraft ${currentVersion}...`;
       await window.api.downloadMcVersion(currentVersion, currentLoader);
     }
-  } catch {}
+  } catch (err) {
+    toast(t('play.error'), err.message || String(err), 'error');
+    pcText.textContent = 'Launch failed';
+    this.disabled = false; this.textContent = t('play.btn');
+    setTimeout(() => pc.classList.remove('active'), 1500);
+    return;
+  }
 
   pcText.textContent = 'Launching...';
   const result = await window.api.launchGame(launchProfile.id, activeAccountId);
@@ -1189,7 +1234,7 @@ $('btn-play').onclick = async function () {
     setTimeout(() => { this.disabled = false; this.textContent = t('play.btn'); pc.classList.remove('active'); }, 3000);
   } else {
     let msg = result.error || t('toast.error');
-    if (msg.includes('Java not found')) msg += ' Download Java at https://adoptium.net';
+    if (msg.includes('Java not found') || msg.includes('Java 21')) msg += ' — will retry download in Settings > Java Runtime';
     toast(t('play.error'), msg, 'error');
     pcText.textContent = 'Launch failed';
     this.disabled = false; this.textContent = t('play.btn');
@@ -1395,6 +1440,7 @@ async function init() {
 
     document.querySelectorAll('.ram-btn').forEach((b) => b.classList.toggle('active', parseInt(b.dataset.ram) === currentRam));
     $('input-jvm').value = currentJvm;
+    if (settings.javaPath && $('input-java-path')) $('input-java-path').value = settings.javaPath;
     $('toggle-keep').checked = currentKeepOpen;
     $('toggle-rpc').checked = settings.discordRpc !== false;
     if (settings.accentColor) {
@@ -1415,7 +1461,7 @@ async function init() {
     const isFirstRun = !accounts.length && !profiles.length;
     const java = await window.api.checkJava();
     if (java.found) {
-      $('java-status').innerHTML = `<span style="color:var(--success)">&#9679;</span> ${t('settings.java_found', { version: java.version })} ${java.path ? '' : '(from PATH)'}`;
+      showJavaStatus(java);
       loadingStatus.textContent = 'Ready!';
       setTimeout(() => {
         window.api.expandWindow();
@@ -1435,7 +1481,9 @@ async function init() {
         }
       }, 800);
     } else {
-      loadingStatus.textContent = 'Downloading Java 17...';
+      loadingStatus.textContent = java.needsInstall && java.version
+        ? `Java ${java.version} is too old — downloading Java 21...`
+        : 'Downloading Java 21...';
       $('loading-detail').textContent = 'This may take a moment';
       const javaProgress = document.createElement('div');
       javaProgress.className = 'loading-java-progress';
@@ -1444,7 +1492,7 @@ async function init() {
       const result = await window.api.installJava();
       javaProgress.remove();
       if (result.success) {
-        $('java-status').innerHTML = `<span style="color:var(--success)">&#9679;</span> ${t('settings.java_found', { version: '17' })} (auto-installed)`;
+        $('java-status').innerHTML = `<span style="color:var(--success)">&#9679;</span> ${t('settings.java_found', { version: '21' })} (auto-installed)`;
         loadingStatus.textContent = 'Ready!';
         setTimeout(() => {
           window.api.expandWindow();
@@ -1789,6 +1837,10 @@ window.api.onJavaInstallProgress((p) => {
   if (status && p.status) {
     status.innerHTML = `<span style="color:var(--accent)">&#9679;</span> ${p.status}`;
   }
+  const pcText = $('progress-text');
+  if (pcText && p.status) pcText.textContent = p.status;
+  const playFill = $('progress-fill');
+  if (playFill && typeof p.percent === 'number') playFill.style.width = `${p.percent}%`;
   loadingStatus.textContent = p.status || 'Installing Java...';
   const fill = $('loading-java-fill');
   if (fill) fill.style.width = `${p.percent}%`;

@@ -40,15 +40,15 @@ function ensureDataDir() {
   if (!fs.existsSync(accountsFile)) fs.writeFileSync(accountsFile, JSON.stringify([], null, 2));
   if (!fs.existsSync(settingsFile)) {
     fs.writeFileSync(settingsFile, JSON.stringify({
-      activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true,
+      activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, javaPath: '',
     }, null, 2));
   }
 }
 
 function getSavedSettings() {
   ensureDataDir();
-  try { return { activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, ...JSON.parse(fs.readFileSync(settingsFile, 'utf8')) }; }
-  catch { return { activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true }; }
+  try { return { activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, javaPath: '', ...JSON.parse(fs.readFileSync(settingsFile, 'utf8')) }; }
+  catch { return { activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, javaPath: '' }; }
 }
 
 function saveSettingsToStore(newSettings) {
@@ -81,59 +81,38 @@ function removeAccountFromStore(accountId) {
 }
 
 function checkJava() {
-  const localPath = javaService.getInstalledPath();
-  if (localPath) {
-    try {
-      const out = execSync(`"${localPath}" -version 2>&1`, { timeout: 5000 }).toString();
-      const match = out.match(/(\d+)\.(\d+)/);
-      return { found: true, version: match ? `${match[1]}.${match[2]}` : 'unknown', full: out.split('\n')[0], path: localPath };
-    } catch {}
-  }
-
+  const settings = getSavedSettings();
   try {
-    const out = execSync('java -version 2>&1', { timeout: 5000 }).toString();
-    const match = out.match(/(\d+)\.(\d+)/);
-    if (match) return { found: true, version: `${match[1]}.${match[2]}`, full: out.split('\n')[0] };
-    return { found: true, version: 'unknown', full: out.split('\n')[0] };
+    const best = javaService.findJava({ settingsPath: settings.javaPath, minMajor: 21 });
+    if (best) {
+      return {
+        found: true,
+        major: best.major,
+        version: String(best.major),
+        full: best.full,
+        path: best.path,
+        is64: best.is64,
+      };
+    }
   } catch {}
 
-  const candidates = [];
-  const javaHome = process.env.JAVA_HOME;
-  if (javaHome) {
-    const p = path.join(javaHome, 'bin', 'java.exe');
-    if (fs.existsSync(p)) candidates.push(p);
-  }
+  try {
+    const any = javaService.findAnyJava();
+    if (any) {
+      return {
+        found: false,
+        major: any.major,
+        version: String(any.major),
+        full: any.full,
+        path: any.path,
+        is64: any.is64,
+        needsInstall: true,
+        reason: any.major < 21 ? `Java ${any.major} is too old (21+ required)` : 'Java is not 64-bit',
+      };
+    }
+  } catch {}
 
-  const searchDirs = [
-    'C:\\Program Files\\Java',
-    'C:\\Program Files\\Eclipse Adoptium',
-    'C:\\Program Files\\Microsoft',
-    'C:\\Program Files\\Amazon Corretto',
-    'C:\\Program Files\\Zulu',
-    'C:\\Program Files\\LibericaJDK',
-    'C:\\Program Files (x86)\\Java',
-    'C:\\Program Files (x86)\\Eclipse Adoptium',
-  ];
-
-  for (const dir of searchDirs) {
-    try {
-      if (!fs.existsSync(dir)) continue;
-      for (const entry of fs.readdirSync(dir)) {
-        const fullPath = path.join(dir, entry, 'bin', 'java.exe');
-        if (fs.existsSync(fullPath)) candidates.push(fullPath);
-      }
-    } catch {}
-  }
-
-  for (const p of candidates) {
-    try {
-      const out = execSync(`"${p}" -version 2>&1`, { timeout: 3000 }).toString();
-      const match = out.match(/(\d+)\.(\d+)/);
-      return { found: true, version: match ? `${match[1]}.${match[2]}` : 'unknown', full: out.split('\n')[0], path: p };
-    } catch {}
-  }
-
-  return { found: false, version: null, full: null, path: null };
+  return { found: false, version: null, full: null, path: null, major: 0, needsInstall: true };
 }
 
 function saveWindowState() {
@@ -215,6 +194,19 @@ ipcMain.on('window-close', () => { app.quit(); });
 ipcMain.on('window-expand', () => mainWindow?.setMinimumSize(850, 580));
 
 ipcMain.handle('check-java', async () => checkJava());
+
+ipcMain.handle('browse-java', async () => {
+  const { dialog } = require('electron');
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select java executable',
+    filters: process.platform === 'win32'
+      ? [{ name: 'Java', extensions: ['exe'] }]
+      : [{ name: 'Java', extensions: [] }],
+    properties: ['openFile'],
+  });
+  return result.canceled || !result.filePaths.length ? null : result.filePaths[0];
+});
 
 ipcMain.handle('install-java', async (e) => {
   try {
@@ -378,7 +370,7 @@ function getPlaytimeSessions() {
 }
 
 ipcMain.handle('check-updates', async () => updateService.checkForUpdates());
-ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return '1.4.14'; } });
+ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return '1.4.15'; } });
 
 ipcMain.handle('get-saved-skins', async () => {
   const skinDir = path.join(baseDataDir, 'skins');
@@ -751,7 +743,7 @@ ipcMain.handle('download-update', async (e, downloadUrl) => {
     e.sender.send('update-progress', { percent: 100, status: 'Download complete' });
     const { spawn } = require('child_process');
     fs.writeFileSync(path.join(baseDataDir, '.updated'), '1');
-    spawn(dest, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore' }).unref();
+    spawn(dest, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     setTimeout(() => { mainWindow?.destroy(); app.quit(); }, 4000);
     return { success: true };
   } catch (err) { return { success: false, error: err.message }; }
@@ -770,7 +762,7 @@ ipcMain.handle('backup-profile', async (e, { profileId }) => {
     const zipName = `${safeName}_${timestamp}.zip`;
     const zipPath = path.join(backupDir, zipName);
     const psCmd = `Compress-Archive -Path '${modsDir}\\*' -DestinationPath '${zipPath}' -Force`;
-    execSync(`powershell -NoProfile -Command "${psCmd.replace(/"/g, '\\"')}"`, { timeout: 30000 });
+    execSync(`powershell -NoProfile -Command "${psCmd.replace(/"/g, '\\"')}"`, { timeout: 30000, windowsHide: true });
     if (!fs.existsSync(zipPath)) {
       fs.writeFileSync(path.join(backupDir, `${safeName}_${timestamp}.json`), JSON.stringify(profile, null, 2));
       fs.writeFileSync(path.join(backupDir, `${safeName}_${timestamp}.md`), 'Profile: ' + profile.name + '\nMods dir: ' + modsDir);

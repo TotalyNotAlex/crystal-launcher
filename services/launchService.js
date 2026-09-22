@@ -6,70 +6,80 @@ const { Client, Authenticator } = require('minecraft-launcher-core');
 const profileService = require('./profileService');
 const versionService = require('./versionService');
 const authService = require('./authService');
+const JavaService = require('./javaService');
+
+// Hide the console window when Java/Minecraft starts (no terminal flash on Play).
+const originalStartMinecraft = Client.prototype.startMinecraft;
+Client.prototype.startMinecraft = function (launchArguments) {
+  const child = require('child_process');
+  const minecraft = child.spawn(this.options.javaPath || 'java', launchArguments, {
+    cwd: this.options.overrides.cwd || this.options.root,
+    detached: this.options.overrides.detached,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  minecraft.stdout.on('data', (data) => this.emit('data', data.toString('utf-8')));
+  minecraft.stderr.on('data', (data) => this.emit('data', data.toString('utf-8')));
+  minecraft.on('close', (code) => this.emit('close', code));
+  return minecraft;
+};
+
+// Hide console when MCLC probes `java -version`.
+try {
+  const Handler = require('minecraft-launcher-core/components/handler');
+  Handler.prototype.checkJava = function (java) {
+    return new Promise((resolve) => {
+      require('child_process').exec(`"${java}" -version`, { windowsHide: true, timeout: 15000 }, (error, stdout, stderr) => {
+        if (error) {
+          resolve({ run: false, message: error });
+        } else {
+          const m = (stderr || '').match(/"(.*?)"/);
+          this.client.emit('debug', `[MCLC]: Using Java version ${m ? m.pop() : 'unknown'}`);
+          resolve({ run: true });
+        }
+      });
+    });
+  };
+} catch {}
 
 class LaunchService {
   constructor() {
     this.gameDir = path.join(app ? app.getPath('userData') : process.cwd(), '.crystall', 'game');
+    this.dataDir = path.join(app ? app.getPath('userData') : process.cwd(), '.crystall');
   }
 
-  findJava() {
-    const { execSync } = require('child_process');
-
-    const JavaService = require('./javaService');
-    const javaSvc = new JavaService(app.getPath('userData'));
-    const installed = javaSvc.getInstalledPath();
-    if (installed) return installed;
-
-    const localJava = path.join(app.getPath('userData'), '.crystall', 'java');
-    if (fs.existsSync(localJava)) {
-      try {
-        for (const entry of fs.readdirSync(localJava)) {
-          const exe = path.join(localJava, entry, 'bin', 'java.exe');
-          if (fs.existsSync(exe)) return exe;
-        }
-      } catch {}
-    }
-
+  readSettings() {
     try {
-      const out = execSync('java -version 2>&1', { timeout: 5000 }).toString();
-      if (out) return 'java';
+      const p = path.join(this.dataDir, 'settings.json');
+      if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
     } catch {}
+    return {};
+  }
 
-    const candidates = [];
+  async ensureJava(onStatus, onProgress) {
+    const javaSvc = new JavaService(this.dataDir);
+    const settings = this.readSettings();
 
-    const javaHome = process.env.JAVA_HOME;
-    if (javaHome) {
-      const p = path.join(javaHome, 'bin', 'java.exe');
-      if (fs.existsSync(p)) candidates.push(p);
+    if (onStatus) onStatus('Checking Java 21+ runtime...');
+    try {
+      const info = await javaSvc.ensureJava({
+        settingsPath: settings.javaPath,
+        minMajor: 21,
+        onProgress: (p) => {
+          if (onStatus) onStatus(p.status || 'Installing Java...');
+          if (onProgress && typeof p.percent === 'number') {
+            onProgress({ percent: p.percent, status: p.status });
+          }
+        },
+      });
+      if (onStatus) onStatus(`Using Java ${info.major} (${info.path})`);
+      return info.path;
+    } catch (err) {
+      throw new Error(
+        `Java 21+ is required but could not be installed: ${err.message}. ` +
+        'Download Temurin 21 manually from https://adoptium.net or use Retry in Settings > Java Runtime.'
+      );
     }
-
-    const searchDirs = [
-      'C:\\Program Files\\Java',
-      'C:\\Program Files\\Eclipse Adoptium',
-      'C:\\Program Files\\Microsoft',
-      'C:\\Program Files\\Amazon Corretto',
-      'C:\\Program Files\\Zulu',
-      'C:\\Program Files\\LibericaJDK',
-      'C:\\Program Files (x86)\\Java',
-      'C:\\Program Files (x86)\\Eclipse Adoptium',
-    ];
-
-    for (const dir of searchDirs) {
-      try {
-        if (!fs.existsSync(dir)) continue;
-        for (const entry of fs.readdirSync(dir)) {
-          const fullPath = path.join(dir, entry, 'bin', 'java.exe');
-          if (fs.existsSync(fullPath)) candidates.push(fullPath);
-        }
-      } catch {}
-    }
-
-    for (const c of candidates) {
-      try {
-        if (fs.existsSync(c)) return c;
-      } catch {}
-    }
-    return null;
   }
 
   async getLatestFabricLoader() {
@@ -195,9 +205,15 @@ class LaunchService {
   async launchGame(profile, account, onProgress, onStatus, onLog, onRunning, onExit, server) {
     return new Promise(async (resolve, reject) => {
       try {
-        const javaPath = this.findJava();
+        let javaPath;
+        try {
+          javaPath = await this.ensureJava(onStatus, onProgress);
+        } catch (err) {
+          reject(err);
+          return;
+        }
         if (!javaPath) {
-          reject(new Error('Java not found. Please install Java 17 or later from https://adoptium.net'));
+          reject(new Error('Java not found. Please install Java 21 or later from https://adoptium.net'));
           return;
         }
 
@@ -252,11 +268,11 @@ class LaunchService {
           ],
         };
 
-        if (server) {
-          opts.server = {
-            host: server.host,
-            port: server.port || 25565
-          };
+        if (server && server.host) {
+          const identifier = server.port && Number(server.port) !== 25565
+            ? `${server.host}:${server.port}`
+            : server.host;
+          opts.quickPlay = { type: 'multiplayer', identifier };
         }
 
         if (loaderType === 'fabric') {
