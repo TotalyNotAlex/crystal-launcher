@@ -197,7 +197,7 @@ class JavaService {
     return null;
   }
 
-  getAdoptiumUrl(feature, imageType) {
+  getAdoptiumQuery(feature, imageType) {
     const osMap = { win32: 'windows', darwin: 'mac', linux: 'linux' };
     const archMap = { x64: 'x64', arm64: 'aarch64', ia32: 'x86' };
     const osName = osMap[process.platform];
@@ -208,7 +208,24 @@ class JavaService {
     if (process.arch === 'ia32') {
       throw new Error('32-bit systems are not supported for Java 21. Please install a 64-bit JDK manually.');
     }
-    return `https://api.adoptium.net/v3/binary/latest/${feature}/ga/${osName}/${arch}/${imageType}/hotspot/eclipse?project=jdk`;
+    return {
+      feature,
+      imageType,
+      osName,
+      arch,
+      url: `https://api.adoptium.net/v3/assets/latest/${feature}/hotspot?image_type=${imageType}&os=${osName}&architecture=${arch}`,
+    };
+  }
+
+  async resolveDownloadUrl(feature, imageType) {
+    const q = this.getAdoptiumQuery(feature, imageType);
+    const res = await axios.get(q.url, { timeout: 30000, maxRedirects: 5 });
+    const assets = Array.isArray(res.data) ? res.data : [];
+    for (const asset of assets) {
+      const link = asset && asset.binary && asset.binary.package && asset.binary.package.link;
+      if (link) return link;
+    }
+    throw new Error(`No Temurin ${feature} ${imageType} build found for ${q.osName}/${q.arch}`);
   }
 
   async ensureJava({ settingsPath, onProgress, minMajor = MIN_MAJOR } = {}) {
@@ -235,13 +252,9 @@ class JavaService {
     let lastError = null;
 
     for (const attempt of attempts) {
-      let url;
       try {
-        url = this.getAdoptiumUrl(minMajor, attempt.imageType);
-      } catch (err) {
-        throw err;
-      }
-      try {
+        onProgress?.({ percent: 0, status: `Resolving Java ${minMajor} ${attempt.label} download...` });
+        const url = await this.resolveDownloadUrl(minMajor, attempt.imageType);
         onProgress?.({ percent: 0, status: `Downloading Java ${minMajor} ${attempt.label}...` });
         await this.downloadFile(url, onProgress, attempt.label);
         onProgress?.({ percent: 75, status: 'Extracting Java...' });
