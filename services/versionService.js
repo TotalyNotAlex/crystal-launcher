@@ -98,13 +98,38 @@ class VersionService {
     }
   }
 
+    async getNeoForgeVersions() {
+    if (this.cache.neoforge) return this.cache.neoforge;
+    try {
+      const mcVersions = ['1.21.11', '1.21.1', '1.21.0', '1.20.6', '1.20.4', '1.20.2', '1.20.1'];
+      const neoforgeMap = {
+        '1.21.11': '21.1.65',
+        '1.21.1': '21.1.64',
+        '1.21.0': '21.0.167',
+        '1.20.6': '20.6.119',
+        '1.20.4': '20.4.167',
+        '1.20.2': '20.2.86',
+        '1.20.1': '47.1.84'
+      };
+      const result = { mcVersions, neoforgeMap };
+      this.cache.neoforge = result;
+      return result;
+    } catch {
+      return {
+        mcVersions: ['1.21.1', '1.20.4', '1.20.1'],
+        neoforgeMap: { '1.21.1': '21.1.64', '1.20.4': '20.4.167', '1.20.1': '47.1.84' }
+      };
+    }
+  }
+
   async getAllVersions() {
-    const [vanilla, fabric, forge] = await Promise.all([
+    const [vanilla, fabric, forge, neoforge] = await Promise.all([
       this.getVanillaVersions(),
       this.getFabricVersions(),
       this.getForgeVersions(),
+      this.getNeoForgeVersions()
     ]);
-    return { vanilla, fabric, forge };
+    return { vanilla, fabric, forge, neoforge };
   }
 }
 

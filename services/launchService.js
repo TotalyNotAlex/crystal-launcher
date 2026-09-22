@@ -163,7 +163,36 @@ class LaunchService {
     try { fs.copyFileSync(overlayJar, target); console.log('Overlay mod installed to', target); } catch (err) { console.warn('Failed to install overlay mod:', err.message); }
   }
 
-  async launchGame(profile, account, onProgress, onStatus, onLog, onRunning, onExit) {
+    async ensureNeoForgeVersion(mcVersion) {
+    try {
+      const neoforgeData = await versionService.getNeoForgeVersions();
+      const buildNumber = neoforgeData.neoforgeMap[mcVersion];
+      if (!buildNumber) return null;
+
+      const versionName = `neoforge-${mcVersion}-${buildNumber}`;
+      const versionDir = path.join(this.gameDir, 'versions', versionName);
+      const versionJsonPath = path.join(versionDir, `${versionName}.json`);
+
+      if (!fs.existsSync(versionJsonPath)) {
+        fs.mkdirSync(versionDir, { recursive: true });
+        
+        const installerUrl = `https://maven.neoforged.net/releases/net/neoforged/neoforge/${buildNumber}/neoforge-${buildNumber}-installer.jar`;
+        const installerPath = path.join(this.gameDir, `${versionName}-installer.jar`);
+        
+        if (!fs.existsSync(installerPath)) {
+          const res = await axios.get(installerUrl, { responseType: 'arraybuffer', timeout: 60000 });
+          fs.writeFileSync(installerPath, res.data);
+        }
+        return { name: versionName, json: null, installer: installerPath };
+      }
+      return { name: versionName, json: versionJsonPath };
+    } catch (err) {
+      console.warn('NeoForge setup warning:', err.message);
+      return null;
+    }
+  }
+
+  async launchGame(profile, account, onProgress, onStatus, onLog, onRunning, onExit, server) {
     return new Promise(async (resolve, reject) => {
       try {
         const javaPath = this.findJava();
@@ -223,6 +252,13 @@ class LaunchService {
           ],
         };
 
+        if (server) {
+          opts.server = {
+            host: server.host,
+            port: server.port || 25565
+          };
+        }
+
         if (loaderType === 'fabric') {
           if (onStatus) onStatus(`Fetching Fabric for ${mcVersion}...`);
           const fabric = await this.ensureFabricVersionManifest(mcVersion, profile.loaderVersion);
@@ -234,6 +270,13 @@ class LaunchService {
           if (forge) {
             if (forge.json) opts.version.custom = forge.name;
             if (forge.installer) opts.forge = forge.installer;
+          }
+        } else if (loaderType === 'neoforge') {
+          if (onStatus) onStatus(`Preparing NeoForge for ${mcVersion}...`);
+          const neoforge = await this.ensureNeoForgeVersion(mcVersion);
+          if (neoforge) {
+            if (neoforge.json) opts.version.custom = neoforge.name;
+            if (neoforge.installer) opts.forge = neoforge.installer;
           }
         }
 

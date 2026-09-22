@@ -53,7 +53,7 @@ let currentJvm = '';
 let currentKeepOpen = true;
 let fullVersions = [];
 
-const loaderNames = { vanilla: 'Vanilla', fabric: 'Fabric', forge: 'Forge' };
+const loaderNames = { vanilla: 'Vanilla', fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge' };
 
 const $ = (id) => document.getElementById(id);
 const loadingOverlay = $('loading-overlay');
@@ -140,6 +140,18 @@ function saveSettings() {
   window.api.saveSettings({ activeAccountId, activeProfileId, lastLoader: currentLoader, lastVersion: currentVersion, defaultRam: currentRam, jvmArgs: currentJvm, keepLauncherOpen: currentKeepOpen, language: currentLang, discordRpc: $('toggle-rpc')?.checked ?? true, accentColor: accent });
 }
 
+async function updateActiveProfile() {
+  if (!activeProfileId) return;
+  const p = profiles.find((p) => p.id === activeProfileId);
+  if (p) {
+    p.loaderType = currentLoader;
+    p.mcVersion = currentVersion;
+    await window.api.saveProfile(p);
+    profiles = await window.api.getProfiles();
+    updateProfiles();
+  }
+}
+
 function setLoader(val) {
   currentLoader = val;
   $('trigger-loader-text').textContent = loaderNames[val];
@@ -147,11 +159,13 @@ function setLoader(val) {
   populateVersions(val);
   updateSummary();
   saveSettings();
+  updateActiveProfile();
 }
 
 function populateVersions(loaderType) {
   if (loaderType === 'fabric' && versionsData.fabric) fullVersions = versionsData.fabric.mcVersions;
   else if (loaderType === 'forge' && versionsData.forge) fullVersions = versionsData.forge.mcVersions;
+  else if (loaderType === 'neoforge' && versionsData.neoforge) fullVersions = versionsData.neoforge.mcVersions;
   else if (versionsData.vanilla) fullVersions = versionsData.vanilla.releases.map((r) => r.id);
   else fullVersions = ['1.20.4', '1.20.1', '1.19.4', '1.16.5', '1.12.2', '1.8.9'];
 
@@ -170,7 +184,7 @@ function renderVersions(query) {
     const el = document.createElement('div');
     el.className = `dropdown-option ${v === currentVersion ? 'selected' : ''}`;
     el.textContent = v;
-    el.onclick = (e) => { e.stopPropagation(); currentVersion = v; $('trigger-version-text').textContent = v; $('dropdown-version').classList.remove('open'); updateSummary(); saveSettings(); };
+    el.onclick = (e) => { e.stopPropagation(); currentVersion = v; $('trigger-version-text').textContent = v; $('dropdown-version').classList.remove('open'); updateSummary(); saveSettings(); updateActiveProfile(); };
     list.appendChild(el);
   });
 }
@@ -991,7 +1005,7 @@ async function connectToServer(server) {
   let profile = profiles.find((p) => p.id === settings.activeProfileId) || profiles[0];
   if (!profile) { toast(t('toast.error'), t('mods.select_profile'), 'error'); return; }
   toast('Connecting', `Joining ${server.name}...`);
-  const result = await window.api.launchGame(profile.id, settings.activeAccountId);
+  const result = await window.api.launchGame(profile.id, settings.activeAccountId, { host: server.address, port: server.port });
   if (!result.success) toast(t('play.error'), result.error || t('toast.error'), 'error');
 }
 

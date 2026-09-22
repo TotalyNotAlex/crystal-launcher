@@ -310,7 +310,7 @@ ipcMain.handle('get-mods', async (e, id) => profileService.listMods(id));
 ipcMain.handle('toggle-mod', async (e, { profileId, fileName, enabled }) => profileService.toggleMod(profileId, fileName, enabled));
 ipcMain.handle('open-mods-folder', async (e, id) => { const f = profileService.getModsFolder(id); shell.openPath(f); return f; });
 
-ipcMain.handle('launch-game', async (e, { profileId, accountId }) => {
+ipcMain.handle('launch-game', async (e, { profileId, accountId, server }) => {
   try {
     const settings = getSavedSettings();
     const profiles = profileService.getProfiles();
@@ -346,7 +346,8 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId }) => {
         if (settings2.discordRpc !== false) {
           setTimeout(() => { rpcService.connect(); }, 500);
         }
-      }
+      },
+      server
     );
     if (result?.status === 'started') {
       const sessions = getPlaytimeSessions();
@@ -707,14 +708,24 @@ ipcMain.handle('curseforge-download', async (e, { fileId, fileName, profileId })
   } catch (err) { return { success: false, error: err.message }; }
 });
 
+const defaultServers = [
+  { id: 'hypixel', name: 'Hypixel', address: 'mc.hypixel.net', port: 25565 },
+  { id: 'pvpland', name: 'PvP Land', address: 'pvp.land', port: 25565 },
+  { id: 'crystal', name: 'Crystal Network', address: 'play.crystalmc.net', port: 25565 }
+];
+
 ipcMain.handle('get-servers', async () => {
-  if (!fs.existsSync(serversFile)) return [];
+  if (!fs.existsSync(serversFile)) {
+    try {
+      fs.writeFileSync(serversFile, JSON.stringify(defaultServers, null, 2));
+      return defaultServers;
+    } catch { return []; }
+  }
   try { return JSON.parse(fs.readFileSync(serversFile, 'utf8')); }
   catch { return []; }
 });
 
 ipcMain.handle('save-server', async (e, server) => {
-  const servers = await ipcMain.emit('get-servers') || [];
   const list = fs.existsSync(serversFile) ? JSON.parse(fs.readFileSync(serversFile, 'utf8')) : [];
   const idx = list.findIndex((s) => s.id === server.id);
   if (idx !== -1) list[idx] = server;

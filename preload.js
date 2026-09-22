@@ -33,7 +33,7 @@ contextBridge.exposeInMainWorld('api', {
   toggleMod: (id, f, e) => ipcRenderer.invoke('toggle-mod', { profileId: id, fileName: f, enabled: e }),
   openModsFolder: (id) => ipcRenderer.invoke('open-mods-folder', id),
 
-  launchGame: (pid, aid) => ipcRenderer.invoke('launch-game', { profileId: pid, accountId: aid }),
+  launchGame: (pid, aid, server) => ipcRenderer.invoke('launch-game', { profileId: pid, accountId: aid, server }),
 
   modrinthSearch: (q, facets, offset, index) => ipcRenderer.invoke('modrinth-search', { query: q, facets, offset, index }),
   modrinthProject: (slug) => ipcRenderer.invoke('modrinth-project', slug),
