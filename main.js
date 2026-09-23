@@ -1,7 +1,9 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, Tray, Menu, nativeImage, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
+const axios = require('axios');
+const { spawn } = require('child_process');
 
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
@@ -23,6 +25,9 @@ const i18n = require('./services/i18nService');
 const JavaService = require('./services/javaService');
 const updateService = require('./services/updateService');
 const rpcService = require('./services/rpcService');
+const serverPingService = require('./services/serverPingService');
+const crashAnalyzer = require('./services/crashAnalyzer');
+let bgUpdatePath = null;
 
 let mainWindow = null;
 const isUpdateRestart = process.argv.includes('--updated');
@@ -47,8 +52,8 @@ function ensureDataDir() {
 
 function getSavedSettings() {
   ensureDataDir();
-  try { return { activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, javaPath: '', ...JSON.parse(fs.readFileSync(settingsFile, 'utf8')) }; }
-  catch { return { activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, javaPath: '' }; }
+  try { return { activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, javaPath: '', autoBackup: false, backupKeep: 5, ...JSON.parse(fs.readFileSync(settingsFile, 'utf8')) }; }
+  catch { return { activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, javaPath: '', autoBackup: false, backupKeep: 5 }; }
 }
 
 function saveSettingsToStore(newSettings) {
@@ -161,11 +166,38 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const gotLock = app.requestSingleInstanceLock();
+  if (!gotLock) {
+    app.quit();
+    return;
+  }
+  app.on('second-instance', (event, argv) => {
+    const urlArg = argv.find((a) => a.startsWith('crystall://'));
+    if (urlArg) handleDeepLink(urlArg);
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  try {
+    if (process.defaultApp) {
+      app.setAsDefaultProtocolClient('crystall', process.execPath, [path.resolve(process.argv[1] || '.')]);
+    } else {
+      app.setAsDefaultProtocolClient('crystall');
+    }
+  } catch (err) { console.warn('Protocol register failed:', err.message); }
+
+  const coldLink = process.argv.find((a) => a.startsWith('crystall://'));
+  if (coldLink) setTimeout(() => handleDeepLink(coldLink), 1500);
+
   createWindow();
+  createTray();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
   const updatedFile = path.join(baseDataDir, '.updated');
-  if (fs.existsSync(updatedFile)) {
-    try { fs.unlinkSync(updatedFile); } catch (e) { console.warn('Could not delete .updated file:', e.message); }
+  if (fs.existsSync(updatedFile) && !isUpdateRestart) {
+    // keep marker only during an install restart; cleaned after first successful check
   }
 
   async function checkUpdate() {
@@ -173,6 +205,25 @@ app.whenReady().then(() => {
       const update = await updateService.checkForUpdates();
       if (update.hasUpdate && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-available', update);
+        try {
+          if (update.downloadUrl) {
+            const dest = path.join(baseDataDir, 'update_setup.exe');
+            if (!fs.existsSync(dest)) {
+              updateService.downloadUpdate(update.downloadUrl, dest, (pct) => {
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                  mainWindow.webContents.send('update-progress', { percent: pct, status: `Pre-downloading update... ${pct}%`, background: true });
+                }
+              }).then(() => {
+                bgUpdatePath = dest;
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                  mainWindow.webContents.send('update-progress', { percent: 100, status: 'Update ready — Restart anytime', background: true, ready: true });
+                }
+              }).catch(() => {});
+            } else {
+              bgUpdatePath = dest;
+            }
+          }
+        } catch {}
       }
     } catch {}
   }
@@ -312,6 +363,9 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId, server }) => {
     const account = accounts.find((a) => a.id === accountId) || accounts[0];
     if (!account) return { success: false, error: 'No account selected. Add an account first.' };
     if (settings.defaultRam && (!profile.ram || profile.ram === 4)) profile.ram = settings.defaultRam;
+    if (settings.autoBackup) {
+      try { runScheduledWorldBackups(); } catch {}
+    }
     const sessionStart = Date.now();
     const result = await launchService.launchGame(profile, account,
       (p) => e.sender.send('launch-progress', p),
@@ -370,7 +424,7 @@ function getPlaytimeSessions() {
 }
 
 ipcMain.handle('check-updates', async () => updateService.checkForUpdates());
-ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return '1.4.15'; } });
+ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return '1.4.16'; } });
 
 ipcMain.handle('get-saved-skins', async () => {
   const skinDir = path.join(baseDataDir, 'skins');
@@ -547,23 +601,6 @@ ipcMain.handle('read-crash-log', async (e, fileName) => {
   const filePath = path.join(baseDataDir, 'game', 'crash-reports', fileName);
   if (!fs.existsSync(filePath)) return null;
   try { return fs.readFileSync(filePath, 'utf8'); } catch { return null; }
-});
-
-ipcMain.handle('check-mod-updates', async (e, profileId) => {
-  try {
-    const mods = profileService.listMods(profileId);
-    const results = [];
-    for (const mod of mods) {
-      const name = mod.name.replace(/\.jar$/i, '').replace(/-\d+[\d.]*.*/g, '').trim();
-      if (!name) continue;
-      try {
-        const res = await axios.get(`https://api.modrinth.com/v2/search?query=${encodeURIComponent(name)}&limit=1&index=downloads`, { timeout: 5000 });
-        const hit = res.data?.hits?.[0];
-        if (hit) results.push({ fileName: mod.fileName, name: mod.name, enabled: mod.enabled, latestVersion: hit.version_number || hit.latest_version, slug: hit.slug, hasUpdate: false });
-      } catch {}
-    }
-    return results;
-  } catch (err) { return []; }
 });
 
 ipcMain.handle('download-mc-version', async (e, { version, loaderType }) => {
@@ -837,3 +874,423 @@ ipcMain.handle('get-translations', async (e, lang) => {
 });
 
 ipcMain.handle('get-languages', async () => i18n.getAvailableLanguages());
+
+// === Live server ping ===
+ipcMain.handle('ping-servers', async (e, servers) => {
+  try { return await serverPingService.pingAll(servers || []); }
+  catch (err) { return (servers || []).map((s) => ({ ...s, online: false, error: err.message })); }
+});
+
+ipcMain.handle('ping-server', async (e, { address, port }) => {
+  try { return await serverPingService.ping(address, port || 25565, 4000); }
+  catch (err) { return { online: false, error: err.message }; }
+});
+
+// === Crash analysis ===
+ipcMain.handle('analyze-crash', async (e, content) => {
+  try { return crashAnalyzer.analyze(content); }
+  catch { return { title: 'Unknown error', summary: 'Could not analyze crash.', hints: [] }; }
+});
+
+// === Mod updates via Modrinth hash API ===
+ipcMain.handle('check-mod-updates', async (e, profileId) => {
+  try {
+    const crypto = require('crypto');
+    const mods = profileService.listMods(profileId);
+    const settings = getSavedSettings();
+    const results = [];
+    const hashes = [];
+    const byHash = new Map();
+
+    for (const mod of mods) {
+      const abs = path.join(profileService.getModsFolder(profileId), mod.fileName);
+      try {
+        const buf = fs.readFileSync(abs);
+        const sha1 = crypto.createHash('sha1').update(buf).digest('hex');
+        hashes.push(sha1);
+        byHash.set(sha1, mod);
+      } catch {}
+    }
+
+    if (hashes.length) {
+      const loaderMap = { fabric: 'fabric', quilt: 'quilt', forge: 'forge', neoforge: 'neoforge' };
+      const loaders = settings.lastLoader && loaderMap[settings.lastLoader] ? [loaderMap[settings.lastLoader]] : [];
+      const gameVersions = settings.lastVersion ? [settings.lastVersion] : [];
+      const updates = await modrinthService.checkUpdatesForHashes(hashes, { loaders, gameVersions, algorithm: 'sha1' });
+
+      for (const [sha1, mod] of byHash) {
+        const upd = updates[sha1];
+        if (upd && upd.version_number) {
+          const installedVer = (mod.fileName.match(/[-_](\d+\.\d+[\w.-]*)\.jar/i) || [])[1] || '';
+          results.push({
+            fileName: mod.fileName,
+            name: mod.name,
+            enabled: mod.enabled,
+            latestVersion: upd.version_number,
+            projectUrl: upd.project_id ? `https://modrinth.com/${upd.project_id}` : '',
+            hasUpdate: upd.version_number !== installedVer,
+            slug: upd.project_id || '',
+          });
+        } else {
+          results.push({ fileName: mod.fileName, name: mod.name, enabled: mod.enabled, latestVersion: null, hasUpdate: false, slug: '' });
+        }
+      }
+    }
+    return results;
+  } catch (err) { console.warn('check-mod-updates failed:', err.message); return []; }
+});
+
+// === Mod install with required dependencies ===
+ipcMain.handle('modrinth-install-mod-with-deps', async (e, { url, profileId, fileName, versionId }) => {
+  try {
+    const modsDir = profileService.getModsFolder(profileId);
+    const dest = path.join(modsDir, fileName);
+    const ok = await modrinthService.downloadFile(url, dest, (pct) => {
+      e.sender.send('mod-download-progress', { percent: pct, fileName });
+    });
+    if (!ok) return { success: false, error: 'Download failed' };
+
+    const installedDeps = [];
+    if (versionId) {
+      const deps = await modrinthService.resolveRequiredDependencies(versionId);
+      const seenNames = new Set([fileName.toLowerCase()]);
+      for (const dep of deps) {
+        for (const f of dep.files || []) {
+          if (!f.primary && f !== (dep.files[0])) continue;
+          const depName = f.filename || f.path || 'dep.jar';
+          if (seenNames.has(depName.toLowerCase())) continue;
+          if (fs.existsSync(path.join(modsDir, depName))) { seenNames.add(depName.toLowerCase()); continue; }
+          seenNames.add(depName.toLowerCase());
+          await modrinthService.downloadFile(f.url, path.join(modsDir, depName));
+          installedDeps.push(depName);
+        }
+      }
+    }
+    return { success: true, path: dest, installedDeps };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+// === Screenshots ===
+ipcMain.handle('list-screenshots', async () => {
+  try {
+    const dir = path.join(baseDataDir, 'game', 'screenshots');
+    if (!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir)
+      .filter((f) => /\.(png|jpg|jpeg|webp)$/i.test(f))
+      .map((f) => {
+        const full = path.join(dir, f);
+        const st = fs.statSync(full);
+        return { name: f, path: full, size: st.size, mtime: st.mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+  } catch { return []; }
+});
+
+ipcMain.handle('read-screenshot', async (e, fileName) => {
+  try {
+    const dir = path.join(baseDataDir, 'game', 'screenshots');
+    const full = path.join(dir, path.basename(fileName));
+    if (!fs.existsSync(full)) return null;
+    return `data:image/${path.extname(full).slice(1).toLowerCase()};base64,` + fs.readFileSync(full).toString('base64');
+  } catch { return null; }
+});
+
+ipcMain.handle('delete-screenshot', async (e, fileName) => {
+  try {
+    const dir = path.join(baseDataDir, 'game', 'screenshots');
+    const full = path.join(dir, path.basename(fileName));
+    if (fs.existsSync(full)) fs.unlinkSync(full);
+    return { success: true };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+ipcMain.handle('open-screenshots-folder', async () => {
+  const dir = path.join(baseDataDir, 'game', 'screenshots');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  shell.openPath(dir);
+  return dir;
+});
+
+// === World backups ===
+ipcMain.handle('backup-world', async (e, worldId) => {
+  try {
+    const savesDir = path.join(baseDataDir, 'game', 'saves');
+    const src = path.join(savesDir, path.basename(worldId));
+    if (!fs.existsSync(src)) return { success: false, error: 'World not found' };
+    const destDir = path.join(baseDataDir, 'backups', 'worlds');
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const dest = path.join(destDir, `${path.basename(worldId)}_${stamp}.zip`);
+    const psCmd = `Compress-Archive -Path '${src}\\*' -DestinationPath '${dest}' -Force`;
+    execSync(`powershell -NoProfile -Command "${psCmd.replace(/"/g, '\\"')}"`, { timeout: 60000, windowsHide: true });
+    return { success: fs.existsSync(dest), path: dest };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+function runScheduledWorldBackups() {
+  try {
+    const settings = getSavedSettings();
+    if (!settings.autoBackup) return;
+    const savesDir = path.join(baseDataDir, 'game', 'saves');
+    if (!fs.existsSync(savesDir)) return;
+    const destDir = path.join(baseDataDir, 'backups', 'worlds');
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+    const keep = Math.max(1, parseInt(settings.backupKeep, 10) || 5);
+    for (const world of fs.readdirSync(savesDir)) {
+      const src = path.join(savesDir, world);
+      if (!fs.statSync(src).isDirectory()) continue;
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
+      const dest = path.join(destDir, `${world}_${stamp}.zip`);
+      try {
+        const psCmd = `Compress-Archive -Path '${src}\\*' -DestinationPath '${dest}' -Force`;
+        execSync(`powershell -NoProfile -Command "${psCmd.replace(/"/g, '\\"')}"`, { timeout: 120000, windowsHide: true });
+      } catch (err) { console.warn('World backup failed:', err.message); }
+    }
+    const zips = fs.readdirSync(destDir).filter((f) => f.endsWith('.zip')).sort();
+    while (zips.length > keep) {
+      try { fs.unlinkSync(path.join(destDir, zips.shift())); } catch {}
+    }
+  } catch (err) { console.warn('Scheduled backup error:', err.message); }
+}
+
+// === Profile export/import ===
+ipcMain.handle('export-profile', async (e, profileId) => {
+  try {
+    const profiles = profileService.getProfiles();
+    const profile = profiles.find((p) => p.id === profileId);
+    if (!profile) return { success: false, error: 'Profile not found' };
+    const modsDir = profileService.getModsFolder(profileId);
+    const tmpDir = path.join(baseDataDir, 'export-tmp');
+    if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'profile.json'), JSON.stringify({ format: 'crystal-profile', version: 1, profile }, null, 2));
+    if (fs.existsSync(modsDir)) {
+      fs.cpSync(modsDir, path.join(tmpDir, 'mods'), { recursive: true });
+    }
+    const dest = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export profile',
+      defaultPath: `${(profile.name || 'profile').replace(/[^a-z0-9]+/gi, '_')}.crystalprofile.zip`,
+      filters: [{ name: 'Crystal Profile', extensions: ['zip'] }],
+    });
+    if (dest.canceled || !dest.filePath) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      return { success: false, error: 'Cancelled' };
+    }
+    if (fs.existsSync(dest.filePath)) fs.unlinkSync(dest.filePath);
+    const psCmd = `Compress-Archive -Path '${tmpDir}\\*' -DestinationPath '${dest.filePath}' -Force`;
+    execSync(`powershell -NoProfile -Command "${psCmd.replace(/"/g, '\\"')}"`, { timeout: 60000, windowsHide: true });
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    if (!fs.existsSync(dest.filePath)) return { success: false, error: 'Zip failed' };
+    return { success: true, path: dest.filePath };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+ipcMain.handle('import-profile', async () => {
+  try {
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import profile',
+      filters: [{ name: 'Crystal Profile', extensions: ['zip'] }],
+      properties: ['openFile'],
+    });
+    if (picked.canceled || !picked.filePaths.length) return { success: false, error: 'Cancelled' };
+    const zipPath = picked.filePaths[0];
+    const tmpDir = path.join(baseDataDir, 'import-tmp');
+    if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.mkdirSync(tmpDir, { recursive: true });
+    execSync(`tar -xf "${zipPath}" -C "${tmpDir}"`, { timeout: 30000, windowsHide: true });
+    const metaPath = path.join(tmpDir, 'profile.json');
+    if (!fs.existsSync(metaPath)) throw new Error('Invalid profile file (missing profile.json)');
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    const profile = { ...(meta.profile || meta) };
+    profile.id = 'profile-' + Date.now();
+    profile.created = Date.now();
+    profileService.saveProfile(profile);
+    const srcMods = path.join(tmpDir, 'mods');
+    if (fs.existsSync(srcMods)) {
+      const destMods = profileService.getModsFolder(profile.id);
+      for (const f of fs.readdirSync(srcMods)) {
+        fs.copyFileSync(path.join(srcMods, f), path.join(destMods, f));
+      }
+    }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    return { success: true, profile };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+// === Import .mrpack / CurseForge zip / MultiMC ===
+ipcMain.handle('import-modpack-file', async (e, kind) => {
+  try {
+    const filters = kind === 'multimc'
+      ? [{ name: 'MultiMC/Prism', extensions: ['zip'] }, { name: 'All files', extensions: ['*'] }]
+      : [{ name: 'Modpack', extensions: ['mrpack', 'zip'] }];
+    const picked = await dialog.showOpenDialog(mainWindow, {
+      title: kind === 'multimc' ? 'Import MultiMC/Prism instance' : 'Import modpack file',
+      filters,
+      properties: ['openFile'],
+    });
+    if (picked.canceled || !picked.filePaths.length) return { success: false, error: 'Cancelled' };
+    const filePath = picked.filePaths[0];
+    const tmpDir = path.join(baseDataDir, 'import-pack-tmp');
+    if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.mkdirSync(tmpDir, { recursive: true });
+    execSync(`tar -xf "${filePath}" -C "${tmpDir}"`, { timeout: 120000, windowsHide: true });
+
+    if (kind === 'multimc') {
+      let instanceRoot = tmpDir;
+      const mmcPath = path.join(tmpDir, 'mmc-pack.json');
+      if (!fs.existsSync(mmcPath)) {
+        const sub = fs.readdirSync(tmpDir).find((d) => fs.statSync(path.join(tmpDir, d)).isDirectory());
+        if (sub && fs.existsSync(path.join(tmpDir, sub, 'mmc-pack.json'))) instanceRoot = path.join(tmpDir, sub);
+      }
+      const packPath = path.join(instanceRoot, 'mmc-pack.json');
+      if (!fs.existsSync(packPath)) throw new Error('Not a MultiMC/Prism instance (mmc-pack.json missing)');
+      const pack = JSON.parse(fs.readFileSync(packPath, 'utf8'));
+      const comps = pack.components || [];
+      let mcVersion = '1.20.1';
+      let loaderType = 'vanilla';
+      for (const c of comps) {
+        if (c.uid === 'net.minecraft' && c.version) mcVersion = c.version;
+        if (c.uid === 'net.fabricmc.fabric-loader') loaderType = 'fabric';
+        if (c.uid === 'org.quiltmc.quilt-loader') loaderType = 'quilt';
+        if (c.uid === 'net.minecraftforge') loaderType = 'forge';
+        if (c.uid && c.uid.includes('neoforged')) loaderType = 'neoforge';
+      }
+      let name = 'Imported MultiMC';
+      let ram = 4;
+      try {
+        const cfg = fs.readFileSync(path.join(instanceRoot, 'instance.cfg'), 'utf8');
+        const nameMatch = cfg.match(/^name=(.*)$/m);
+        const ramMatch = cfg.match(/^MaxMemAlloc=(\d+)/m);
+        if (nameMatch) name = nameMatch[1].trim();
+        if (ramMatch) ram = Math.round(parseInt(ramMatch[1], 10) / 1024) || 4;
+      } catch {}
+      const profile = profileService.saveProfile({ name, mcVersion, loaderType, loaderVersion: '', ram, isolate: true, created: Date.now() });
+      const instGame = path.join(baseDataDir, 'instances', profile.id, 'game');
+      fs.mkdirSync(instGame, { recursive: true });
+      for (const sub of ['.minecraft', 'minecraft', '']) {
+        const src = sub ? path.join(instanceRoot, sub) : instanceRoot;
+        if (fs.existsSync(path.join(src, 'mods'))) {
+          fs.cpSync(path.join(src, 'mods'), path.join(profileService.getModsFolder(profile.id)), { recursive: true });
+          break;
+        }
+      }
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      return { success: true, profile };
+    }
+
+    // .mrpack
+    const indexPath = path.join(tmpDir, 'modrinth.index.json');
+    if (!fs.existsSync(indexPath)) throw new Error('Not a valid .mrpack (modrinth.index.json missing)');
+    const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+    const deps = index.dependencies || {};
+    const mcVersion = deps.minecraft || '1.20.1';
+    let loaderType = 'vanilla';
+    if (deps['fabric-loader']) loaderType = 'fabric';
+    if (deps['quilt-loader']) loaderType = 'quilt';
+    if (deps.forge) loaderType = 'forge';
+    if (deps.neoforge) loaderType = 'neoforge';
+    const profile = profileService.saveProfile({
+      name: index.name || 'Imported Modpack',
+      mcVersion,
+      loaderType,
+      loaderVersion: '',
+      ram: 4,
+      created: Date.now(),
+    });
+    const modsDir = profileService.getModsFolder(profile.id);
+    let downloaded = 0;
+    for (const file of index.files || []) {
+      const safePath = path.normalize(file.path || '').replace(/^(\.\.(\/|\\|$))+/, '').replace(/^[/\\]+/, '');
+      if (!safePath || safePath.includes('..')) continue;
+      const url = (file.downloads || [])[0];
+      if (!url) continue;
+      const dest = path.join(modsDir, path.basename(safePath));
+      try { await modrinthService.downloadFile(url, dest); downloaded++; } catch {}
+    }
+    const overrides = path.join(tmpDir, 'overrides');
+    if (fs.existsSync(overrides)) {
+      try { fs.cpSync(overrides, path.join(baseDataDir, 'game'), { recursive: true }); } catch {}
+    }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    return { success: true, profile, downloaded };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+// === Background update download ===
+ipcMain.handle('download-update-bg', async (e, downloadUrl) => {
+  try {
+    if (!downloadUrl) return { success: false, error: 'No URL' };
+    const dest = path.join(baseDataDir, 'update_setup.exe');
+    await updateService.downloadUpdate(downloadUrl, dest, (pct) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', { percent: pct, status: `Downloading update... ${pct}%`, background: true });
+    });
+    bgUpdatePath = dest;
+    fs.writeFileSync(path.join(baseDataDir, '.updated'), '1');
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', { percent: 100, status: 'Update ready', background: true, ready: true });
+    return { success: true, path: dest, ready: true };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+ipcMain.handle('install-bg-update', async () => {
+  try {
+    const dest = bgUpdatePath || path.join(baseDataDir, 'update_setup.exe');
+    if (!fs.existsSync(dest)) return { success: false, error: 'Update not downloaded' };
+    spawn(dest, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    setTimeout(() => { app.quit(); }, 1500);
+    return { success: true };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+// === Taskbar progress ===
+ipcMain.handle('taskbar-progress', (e, pct) => {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (pct === null || pct < 0) mainWindow.setProgressBar(-1);
+      else mainWindow.setProgressBar(Math.min(1, Math.max(0, pct / 100)));
+    }
+  } catch {}
+  return true;
+});
+
+// === crystall:// deep link ===
+function handleDeepLink(url) {
+  try {
+    if (!url || !url.startsWith('crystall://')) return;
+    const rest = url.replace(/^crystall:\/\//i, '');
+    const [cmd, ...args] = rest.split('/');
+    if (cmd === 'join') {
+      const target = args.filter(Boolean).join('/');
+      if (!target) return;
+      const [host, portStr] = target.split(':');
+      const server = { host, port: parseInt(portStr, 10) || 25565 };
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deep-link', { type: 'join', server });
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  } catch (err) { console.warn('Deep link error:', err.message); }
+}
+
+// === Tray ===
+let tray = null;
+function createTray() {
+  try {
+    const iconPath = path.join(__dirname, 'icon.ico');
+    if (!fs.existsSync(iconPath)) return;
+    tray = new Tray(nativeImage.createFromPath(iconPath));
+    tray.setToolTip('Crystal Launcher');
+    const menu = Menu.buildFromTemplate([
+      { label: 'Show Crystal Launcher', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() },
+    ]);
+    tray.setContextMenu(menu);
+    tray.on('click', () => {
+      if (!mainWindow) return;
+      if (mainWindow.isVisible()) { mainWindow.hide(); } else { mainWindow.show(); mainWindow.focus(); }
+    });
+  } catch (err) { console.warn('Tray error:', err.message); }
+}
+

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const CURRENT_VERSION = '1.4.15';
+const CURRENT_VERSION = '1.4.16';
 let manifestPath = '';
 
 class UpdateService {

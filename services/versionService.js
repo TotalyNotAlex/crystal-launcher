@@ -2,7 +2,7 @@ const axios = require('axios');
 
 class VersionService {
   constructor() {
-    this.cache = { vanilla: null, fabric: null, forge: null };
+    this.cache = { vanilla: null, fabric: null, forge: null, quilt: null };
   }
 
   async getVanillaVersions() {
@@ -122,14 +122,42 @@ class VersionService {
     }
   }
 
+  async getQuiltVersions() {
+    if (this.cache.quilt) return this.cache.quilt;
+    try {
+      const [gameRes, loaderRes] = await Promise.all([
+        axios.get('https://meta.quiltmc.org/v2/versions/game', { timeout: 10000 }),
+        axios.get('https://meta.quiltmc.org/v2/versions/loader', { timeout: 10000 }),
+      ]);
+      const validMcRegex = /^1\.\d+(\.\d+)?$/;
+      const mcVersions = (Array.isArray(gameRes.data) ? gameRes.data : [])
+        .map((v) => (typeof v === 'string' ? v : v.version))
+        .filter((v) => v && validMcRegex.test(v));
+      const loaders = (Array.isArray(loaderRes.data) ? loaderRes.data : [])
+        .map((l) => (typeof l === 'string' ? l : l.version))
+        .filter(Boolean);
+      const result = { mcVersions, loaders, latestLoader: loaders[0] || '0.28.0' };
+      this.cache.quilt = result;
+      return result;
+    } catch (err) {
+      console.error('Failed to fetch Quilt versions:', err.message);
+      return {
+        mcVersions: ['1.21.1', '1.20.4', '1.20.1', '1.19.4'],
+        loaders: ['0.28.0'],
+        latestLoader: '0.28.0',
+      };
+    }
+  }
+
   async getAllVersions() {
-    const [vanilla, fabric, forge, neoforge] = await Promise.all([
+    const [vanilla, fabric, forge, quilt, neoforge] = await Promise.all([
       this.getVanillaVersions(),
       this.getFabricVersions(),
       this.getForgeVersions(),
+      this.getQuiltVersions(),
       this.getNeoForgeVersions()
     ]);
-    return { vanilla, fabric, forge, neoforge };
+    return { vanilla, fabric, forge, quilt, neoforge };
   }
 }
 

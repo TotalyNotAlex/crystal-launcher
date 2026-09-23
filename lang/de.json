@@ -79,6 +79,20 @@
   "profiles.new_title": "Neues Profil",
   "profiles.name_placeholder": "Profilname...",
   "profiles.save": "Speichern",
+  "profiles.export": "Exportieren",
+  "profiles.import": "Importieren",
+  "profiles.import_mrpack": "Pack importieren",
+  "profiles.import_multimc": "MultiMC importieren",
+
+  "servers.refresh": "Status aktualisieren",
+
+  "settings.auto_backup": "Welten beim Start automatisch sichern",
+  "settings.auto_backup_desc": "Behält die neuesten Sicherungen jeder Welt",
+  "settings.backup_keep": "Sicherungen behalten",
+  "settings.open_screenshots": "Screenshots durchsuchen",
+
+  "screenshots.title": "Screenshots",
+  "screenshots.none": "Keine Screenshots gefunden",
 
   "accounts.title": "Konten",
   "accounts.subtitle": "Microsoft- und Offline-Konten verwalten",

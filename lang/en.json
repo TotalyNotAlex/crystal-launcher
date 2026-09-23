@@ -80,6 +80,20 @@
   "profiles.new_title": "New Profile",
   "profiles.name_placeholder": "Profile name...",
   "profiles.save": "Save",
+  "profiles.export": "Export",
+  "profiles.import": "Import",
+  "profiles.import_mrpack": "Import Pack",
+  "profiles.import_multimc": "Import MultiMC",
+
+  "servers.refresh": "Refresh Status",
+
+  "settings.auto_backup": "Auto-backup worlds on launch",
+  "settings.auto_backup_desc": "Keeps the most recent backups of each world",
+  "settings.backup_keep": "Keep backups",
+  "settings.open_screenshots": "Browse Screenshots",
+
+  "screenshots.title": "Screenshots",
+  "screenshots.none": "No screenshots found",
 
   "accounts.title": "Accounts",
   "accounts.subtitle": "Manage Microsoft and offline accounts",

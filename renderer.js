@@ -39,7 +39,7 @@ async function setLanguage(lang) {
   saveSettings();
 }
 
-let versionsData = { vanilla: null, fabric: null, forge: null };
+let versionsData = { vanilla: null, fabric: null, quilt: null, forge: null, neoforge: null };
 let accounts = [];
 let profiles = [];
 let activeProfileId = null;
@@ -53,7 +53,7 @@ let currentJvm = '';
 let currentKeepOpen = true;
 let fullVersions = [];
 
-const loaderNames = { vanilla: 'Vanilla', fabric: 'Fabric', forge: 'Forge', neoforge: 'NeoForge' };
+const loaderNames = { vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge' };
 
 const $ = (id) => document.getElementById(id);
 const loadingOverlay = $('loading-overlay');
@@ -137,7 +137,7 @@ function toast(title, msg, type = 'success', duration = 7000) {
 
 function saveSettings() {
   const accent = document.querySelector('.accent-swatch.active')?.dataset.color || $('accent-custom')?.value || '#6c8cff';
-  window.api.saveSettings({ activeAccountId, activeProfileId, lastLoader: currentLoader, lastVersion: currentVersion, defaultRam: currentRam, jvmArgs: currentJvm, keepLauncherOpen: currentKeepOpen, language: currentLang, discordRpc: $('toggle-rpc')?.checked ?? true, accentColor: accent, javaPath: ($('input-java-path')?.value || '').trim() });
+  window.api.saveSettings({ activeAccountId, activeProfileId, lastLoader: currentLoader, lastVersion: currentVersion, defaultRam: currentRam, jvmArgs: currentJvm, keepLauncherOpen: currentKeepOpen, language: currentLang, discordRpc: $('toggle-rpc')?.checked ?? true, accentColor: accent, javaPath: ($('input-java-path')?.value || '').trim(), autoBackup: $('toggle-autobackup')?.checked ?? false, backupKeep: parseInt($('input-backup-keep')?.value, 10) || 5 });
 }
 
 async function updateActiveProfile() {
@@ -164,6 +164,7 @@ function setLoader(val) {
 
 function populateVersions(loaderType) {
   if (loaderType === 'fabric' && versionsData.fabric) fullVersions = versionsData.fabric.mcVersions;
+  else if (loaderType === 'quilt' && versionsData.quilt) fullVersions = versionsData.quilt.mcVersions;
   else if (loaderType === 'forge' && versionsData.forge) fullVersions = versionsData.forge.mcVersions;
   else if (loaderType === 'neoforge' && versionsData.neoforge) fullVersions = versionsData.neoforge.mcVersions;
   else if (versionsData.vanilla) fullVersions = versionsData.vanilla.releases.map((r) => r.id);
@@ -395,10 +396,17 @@ $('modal-install-btn').onclick = async () => {
   $('modal-install-btn').textContent = t('mods.installing');
   $('modal-install-btn').disabled = true;
 
-  const result = await window.api.modrinthDownload(url, pid, filename);
+  const sel = $('modal-version-select');
+  const versionId = sel?.selectedOptions?.[0]?.value || null;
+  let result;
+  if (versionId) {
+    result = await window.api.modrinthInstallWithDeps(url, pid, filename, versionId);
+  } else {
+    result = await window.api.modrinthDownload(url, pid, filename);
+  }
   if (result.success) {
     showModProgress(-1);
-    toast(t('mods.installed_ok'), `${$('modal-mod-title').textContent} ${t('mods.installed_profile')}`);
+    toast(t('mods.installed_ok'), `${$('modal-mod-title').textContent} ${t('mods.installed_profile')}${result.installedDeps?.length ? ` +${result.installedDeps.length} deps` : ''}`);
     $('modal-mod-detail').classList.remove('active');
     refreshInstalledMods();
   } else {
@@ -750,6 +758,47 @@ async function loadMods(pid) {
 
 $('btn-open-mods').onclick = () => activeProfileId && window.api.openModsFolder(activeProfileId);
 $('btn-create-profile').onclick = () => { $('modal-create-profile').classList.add('active'); $('input-profile-name').value = `${loaderNames[currentLoader]} ${currentVersion}`; setTimeout(() => $('input-profile-name').focus(), 50); };
+
+$('btn-export-profile')?.addEventListener('click', async () => {
+  const pid = activeProfileId || profiles[0]?.id;
+  if (!pid) { toast(t('toast.error'), 'No profile selected', 'error'); return; }
+  const res = await window.api.exportProfile(pid);
+  if (res.success) toast(t('toast.saved'), res.path);
+  else if (res.error !== 'Cancelled') toast(t('toast.error'), res.error, 'error');
+});
+
+$('btn-import-profile')?.addEventListener('click', async () => {
+  const res = await window.api.importProfile();
+  if (res.success) {
+    profiles = await window.api.getProfiles();
+    activeProfileId = res.profile.id;
+    saveSettings();
+    updateProfiles();
+    toast(t('toast.saved'), res.profile.name);
+  } else if (res.error !== 'Cancelled') toast(t('toast.error'), res.error, 'error');
+});
+
+$('btn-import-mrpack')?.addEventListener('click', async () => {
+  const res = await window.api.importModpackFile('mrpack');
+  if (res.success) {
+    profiles = await window.api.getProfiles();
+    activeProfileId = res.profile.id;
+    saveSettings();
+    updateProfiles();
+    toast(t('toast.saved'), `${res.profile.name}${res.downloaded ? ` (${res.downloaded} mods)` : ''}`);
+  } else if (res.error !== 'Cancelled') toast(t('toast.error'), res.error, 'error');
+});
+
+$('btn-import-multimc')?.addEventListener('click', async () => {
+  const res = await window.api.importModpackFile('multimc');
+  if (res.success) {
+    profiles = await window.api.getProfiles();
+    activeProfileId = res.profile.id;
+    saveSettings();
+    updateProfiles();
+    toast(t('toast.saved'), res.profile.name);
+  } else if (res.error !== 'Cancelled') toast(t('toast.error'), res.error, 'error');
+});
 $('btn-cancel-profile').onclick = () => $('modal-create-profile').classList.remove('active');
 $('btn-save-profile').onclick = async () => {
   const name = $('input-profile-name').value.trim() || `${loaderNames[currentLoader]} ${currentVersion}`;
@@ -858,10 +907,17 @@ async function updateWorlds(force) {
           <div class="world-meta">${w.gameVersion || '?'} &bull; ${size} &bull; ${date}</div>
         </div>
         <div class="world-actions">
+          <button class="btn btn-secondary world-backup-btn" style="font-size:10px;padding:3px 8px;">Backup</button>
           <button class="btn btn-secondary world-open-btn" style="font-size:10px;padding:3px 8px;">${t('profiles.open')}</button>
           <button class="btn btn-secondary world-delete-btn" style="font-size:10px;padding:3px 8px;color:var(--danger);">${t('profiles.delete')}</button>
         </div>
       `;
+      card.querySelector('.world-backup-btn').onclick = async (e) => {
+        e.stopPropagation();
+        const res = await window.api.backupWorld(w.id);
+        if (res.success) toast(t('toast.saved'), res.path);
+        else toast(t('toast.error'), res.error || 'Backup failed', 'error');
+      };
       card.querySelector('.world-open-btn').onclick = (e) => { e.stopPropagation(); window.api.openSavesFolder(); };
       card.querySelector('.world-delete-btn').onclick = (e) => {
         e.stopPropagation();
@@ -970,7 +1026,8 @@ async function updateServers() {
         <div class="server-icon"><svg viewBox="0 0 24 24"><path d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H4v-2h7v2zm9 0h-7v-2h7v2z"/></svg></div>
         <div class="server-info">
           <div class="server-name">${s.name}</div>
-          <div class="server-address">${s.address}:${s.port}</div>
+          <div class="server-address">${s.address}:${s.port} <span class="server-status" style="color:var(--text-muted);font-size:10px;"></span></div>
+          <div class="server-motd" style="font-size:11px;color:var(--text-dim);display:none;"></div>
         </div>
         <div class="server-actions">
           <button class="btn btn-primary server-connect-btn" style="font-size:11px;padding:5px 14px;" data-i18n="servers.connect">Connect</button>
@@ -992,12 +1049,26 @@ async function updateServers() {
         toast(t('profiles.deleted'), s.name);
       };
       list.appendChild(card);
+      window.api.pingServer(s.address, s.port).then((ping) => {
+        const statusEl = card.querySelector('.server-status');
+        const motdEl = card.querySelector('.server-motd');
+        if (!statusEl) return;
+        if (ping && ping.online) {
+          const players = ping.players ? `${ping.players.online}/${ping.players.max}` : '';
+          statusEl.innerHTML = `<span style="color:var(--success)">&#9679;</span> Online${players ? ` — ${players}` : ''}${typeof ping.latency === 'number' ? ` (${ping.latency}ms)` : ''}`;
+          if (motdEl && ping.motd) { motdEl.style.display = 'block'; motdEl.textContent = ping.motd; }
+        } else {
+          statusEl.innerHTML = `<span style="color:var(--danger)">&#9679;</span> Offline`;
+        }
+      }).catch(() => {});
     });
   } catch (e) {
     console.error('Servers error:', e);
     showError(list, t('servers.load_error') || 'Failed to load servers', () => updateServers());
   }
 }
+
+$('btn-refresh-servers')?.addEventListener('click', () => updateServers());
 
 async function connectToServer(server) {
   const settings = await window.api.getSettings();
@@ -1085,10 +1156,18 @@ $('btn-console-tab-crashes').onclick = async function () {
       const card = document.createElement('div');
       card.className = 'crash-card';
       const date = new Date(log.time).toLocaleString();
-      card.innerHTML = `<div class="crash-header"><span class="crash-name">${log.name}</span><span class="crash-date">${date}</span></div><pre class="crash-content">${log.content.substring(0, 500)}...</pre>`;
+      card.innerHTML = `<div class="crash-header"><span class="crash-name">${log.name}</span><span class="crash-date">${date}</span></div><div class="crash-analysis" style="display:none;font-size:12px;color:var(--text-dim);padding:8px 10px;background:var(--bg-deep);border-radius:var(--radius-sm);margin-bottom:6px;"></div><pre class="crash-content">${log.content.substring(0, 500)}...</pre>`;
       card.onclick = () => {
         const expanded = card.classList.toggle('expanded');
         card.querySelector('.crash-content').textContent = expanded ? log.content : log.content.substring(0, 500) + '...';
+        if (expanded) {
+          window.api.analyzeCrash(log.content).then((analysis) => {
+            const box = card.querySelector('.crash-analysis');
+            if (!box || !analysis) return;
+            box.style.display = 'block';
+            box.innerHTML = `<strong style="color:var(--text);">${analysis.title || 'Crash analysis'}</strong><div style="margin-top:4px;">${analysis.summary || ''}</div>${Array.isArray(analysis.hints) && analysis.hints.length ? `<ul style="margin:6px 0 0 16px;padding:0;">${analysis.hints.map((h) => `<li>${h}</li>`).join('')}</ul>` : ''}`;
+          }).catch(() => {});
+        }
       };
       list.appendChild(card);
     });
@@ -1115,6 +1194,27 @@ function initSettings() {
     btn.onclick = () => { currentRam = parseInt(btn.dataset.ram); document.querySelectorAll('.ram-btn').forEach((b) => b.classList.toggle('active', parseInt(b.dataset.ram) === currentRam)); saveSettings(); toast(t('settings.ram_saved'), t('settings.ram_msg', { ram: currentRam })); };
   });
   $('input-jvm').onchange = () => { currentJvm = $('input-jvm').value.trim(); saveSettings(); toast(t('settings.jvm_saved'), ''); };
+  document.querySelectorAll('.jvm-preset').forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll('.jvm-preset').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentJvm = btn.dataset.preset || '';
+      if ($('input-jvm')) $('input-jvm').value = currentJvm;
+      saveSettings();
+      toast(t('settings.jvm_saved'), btn.textContent);
+    };
+  });
+  const autoBackup = $('toggle-autobackup');
+  if (autoBackup) autoBackup.onchange = () => saveSettings();
+  const backupKeep = $('input-backup-keep');
+  if (backupKeep) backupKeep.onchange = () => saveSettings();
+  $('btn-screenshots-folder')?.addEventListener('click', () => window.api.openScreenshotsFolder());
+  $('btn-browse-screenshots')?.addEventListener('click', async () => {
+    const shots = await window.api.listScreenshots();
+    if (!shots.length) { toast(t('screenshots.none'), ''); return; }
+    toast(t('screenshots.title'), `${shots.length} screenshot(s) — opening folder`);
+    window.api.openScreenshotsFolder();
+  });
   const javaPathInput = $('input-java-path');
   if (javaPathInput) {
     javaPathInput.onchange = () => { saveSettings(); window.api.checkJava().then(showJavaStatus); };
@@ -1317,6 +1417,21 @@ $('wizard-finish').onclick = () => {
   if (activeProfileId) loadMods(activeProfileId);
 };
 
+$('wizard-loader')?.addEventListener('change', () => {
+  const loader = $('wizard-loader').value;
+  let vers = [];
+  if (loader === 'fabric' && versionsData.fabric) vers = versionsData.fabric.mcVersions;
+  else if (loader === 'quilt' && versionsData.quilt) vers = versionsData.quilt.mcVersions;
+  else if (loader === 'forge' && versionsData.forge) vers = versionsData.forge.mcVersions;
+  else if (loader === 'neoforge' && versionsData.neoforge) vers = versionsData.neoforge.mcVersions;
+  else if (versionsData.vanilla) vers = versionsData.vanilla.releases.map((r) => r.id);
+  const wizVer = $('wizard-version');
+  if (wizVer && vers.length) {
+    wizVer.innerHTML = vers.map((v) => `<option value="${v}">${v}</option>`).join('');
+    if (vers.includes(currentVersion)) wizVer.value = currentVersion;
+  }
+});
+
 // Account Quick-Switch
 function updatePlayAccountBar() {
   const nameEl = $('play-account-name');
@@ -1400,8 +1515,11 @@ $('mods-check-updates-btn').onclick = async function () {
   let count = 0;
   installedModsCache.forEach((m) => {
     const found = updates.find((u) => u.fileName === m.fileName);
-    m._hasUpdate = !!found;
-    if (m._hasUpdate) count++;
+    m._hasUpdate = !!(found && found.hasUpdate);
+    if (m._hasUpdate) {
+      m._latestVersion = found.latestVersion;
+      count++;
+    }
   });
   renderInstalledMods();
   this.disabled = false;
@@ -1441,6 +1559,8 @@ async function init() {
     document.querySelectorAll('.ram-btn').forEach((b) => b.classList.toggle('active', parseInt(b.dataset.ram) === currentRam));
     $('input-jvm').value = currentJvm;
     if (settings.javaPath && $('input-java-path')) $('input-java-path').value = settings.javaPath;
+    if ($('toggle-autobackup')) $('toggle-autobackup').checked = !!settings.autoBackup;
+    if ($('input-backup-keep')) $('input-backup-keep').value = settings.backupKeep || 5;
     $('toggle-keep').checked = currentKeepOpen;
     $('toggle-rpc').checked = settings.discordRpc !== false;
     if (settings.accentColor) {
@@ -1828,6 +1948,7 @@ window.api.onMcDownloadProgress((p) => {
   if (pc && p.status) pc.textContent = p.status;
   const fill = $('progress-fill');
   if (fill && p.percent) fill.style.width = `${p.percent}%`;
+  if (typeof p.percent === 'number') window.api.taskbarProgress(p.percent);
 });
 
 window.api.onJavaInstallProgress((p) => {
@@ -1901,6 +2022,26 @@ function updateUpdateProgress(p) {
 
 window.api.onUpdateAvailable(showUpdateDialog);
 window.api.onUpdateProgress(updateUpdateProgress);
+
+window.api.onDeepLink?.((data) => {
+  if (!data || data.type !== 'join' || !data.server) return;
+  toast('Deep link', `Joining ${data.server.host}...`);
+  connectToServer({ id: 'deeplink', name: data.server.host, address: data.server.host, port: data.server.port || 25565 });
+});
+
+// Background update progress in settings
+window.api.onUpdateProgress?.((p) => {
+  if (!p || !p.background) return;
+  const status = $('update-status');
+  if (status && p.status) status.textContent = p.status;
+  if (p.ready) {
+    const btn = $('btn-check-updates');
+    if (btn) {
+      btn.textContent = 'Restart to Update';
+      btn.onclick = async () => { await window.api.installBgUpdate(); };
+    }
+  }
+});
 
 initSettings();
 init();

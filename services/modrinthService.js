@@ -94,6 +94,68 @@ class ModrinthService {
       return [];
     }
   }
+
+  async getVersionById(versionId) {
+    try {
+      const res = await axios.get(`${API_BASE}/version/${versionId}`, { timeout: 10000 });
+      return res.data;
+    } catch {
+      return null;
+    }
+  }
+
+  async resolveRequiredDependencies(versionId, seen = new Set()) {
+    const installed = [];
+    if (!versionId || seen.has(versionId)) return installed;
+    seen.add(versionId);
+    try {
+      const version = await this.getVersionById(versionId);
+      if (!version || !Array.isArray(version.dependencies)) return installed;
+      for (const dep of version.dependencies) {
+        if (dep.dependency_type !== 'required') continue;
+        if (dep.version_id) {
+          const child = await this.getVersionById(dep.version_id);
+          if (child && child.project_id) installed.push(child);
+          const nested = await this.resolveRequiredDependencies(dep.version_id, seen);
+          installed.push(...nested);
+        } else if (dep.project_id) {
+          const project = await this.getProject(dep.project_id);
+          if (project) {
+            const versions = await this.getProjectVersions(dep.project_id);
+            if (versions.length) installed.push(versions[0]);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Dependency resolve error:', err.message);
+    }
+    return installed;
+  }
+
+  async identifyByHashes(hashes, algorithm = 'sha1') {
+    if (!hashes || !hashes.length) return {};
+    try {
+      const res = await axios.post(`${API_BASE}/version_files/hash`, { hashes, algorithm }, { timeout: 15000 });
+      return res.data || {};
+    } catch (err) {
+      console.error('Hash identify error:', err.message);
+      return {};
+    }
+  }
+
+  async checkUpdatesForHashes(hashes, { loaders = [], gameVersions = [], algorithm = 'sha1' } = {}) {
+    if (!hashes || !hashes.length) return {};
+    try {
+      const body = { hashes, algorithm };
+      if (loaders.length) body.loaders = loaders;
+      if (gameVersions.length) body.game_versions = gameVersions;
+      const res = await axios.post(`${API_BASE}/version_files/update`, body, { timeout: 15000 });
+      return res.data || {};
+    } catch (err) {
+      console.error('Update check error:', err.message);
+      return {};
+    }
+  }
 }
 
 module.exports = new ModrinthService();

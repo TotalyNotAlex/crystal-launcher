@@ -132,6 +132,7 @@
                 <div class="dropdown-menu" id="menu-loader">
                   <div class="dropdown-option selected" data-value="vanilla">Vanilla</div>
                   <div class="dropdown-option" data-value="fabric">Fabric</div>
+                  <div class="dropdown-option" data-value="quilt">Quilt</div>
                   <div class="dropdown-option" data-value="forge">Forge</div>
                   <div class="dropdown-option" data-value="neoforge">NeoForge</div>
                 </div>
@@ -274,10 +275,6 @@
             </div>
             <div class="mods-installed-list" id="mods-installed-list"></div>
           </div>
-            <div class="mod-list" id="mods-installed-list">
-              <div class="mod-empty" data-i18n="mods.placeholder_installed">No mods installed yet.</div>
-            </div>
-          </div>
         </div>
 
         <!-- PROFILES VIEW -->
@@ -287,7 +284,13 @@
               <h1 class="page-title" data-i18n="profiles.title">Profiles</h1>
               <p class="page-sub" data-i18n="profiles.subtitle">Isolated environments for mods and configs</p>
             </div>
-            <button class="btn btn-primary" id="btn-create-profile" data-i18n="profiles.new">+ New</button>
+            <div class="header-actions">
+              <button class="btn btn-secondary" id="btn-export-profile" style="font-size:11px;" data-i18n="profiles.export">Export</button>
+              <button class="btn btn-secondary" id="btn-import-profile" style="font-size:11px;" data-i18n="profiles.import">Import</button>
+              <button class="btn btn-secondary" id="btn-import-mrpack" style="font-size:11px;" data-i18n="profiles.import_mrpack">Import Pack</button>
+              <button class="btn btn-secondary" id="btn-import-multimc" style="font-size:11px;" data-i18n="profiles.import_multimc">Import MultiMC</button>
+              <button class="btn btn-primary" id="btn-create-profile" data-i18n="profiles.new">+ New</button>
+            </div>
           </div>
 
           <div class="profile-grid" id="profile-grid"></div>
@@ -339,7 +342,10 @@
               <h1 class="page-title" data-i18n="servers.title">Servers</h1>
               <p class="page-sub" data-i18n="servers.subtitle">Manage your favorite servers</p>
             </div>
-            <button class="btn btn-primary" id="btn-add-server" data-i18n="servers.add">+ Add</button>
+            <div class="header-actions">
+              <button class="btn btn-primary" id="btn-add-server" data-i18n="servers.add">+ Add</button>
+              <button class="btn btn-secondary" id="btn-refresh-servers" style="font-size:11px;" data-i18n="servers.refresh">Refresh Status</button>
+            </div>
           </div>
           <div class="server-list" id="server-list">
             <div class="mods-placeholder" data-i18n="servers.no_servers">No servers yet. Add a server to get started.</div>
@@ -415,6 +421,13 @@
 
             <div class="settings-group">
               <h3 class="group-title" data-i18n="settings.jvm">JVM Flags</h3>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;" id="jvm-presets">
+                <button class="btn btn-secondary jvm-preset" data-preset="" style="font-size:10px;padding:3px 8px;">Default</button>
+                <button class="btn btn-secondary jvm-preset" data-preset="-Xmn512M -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200" style="font-size:10px;padding:3px 8px;">Performance</button>
+                <button class="btn btn-secondary jvm-preset" data-preset="-XX:+UseZGC -XX:+ShrinkingHeap" style="font-size:10px;padding:3px 8px;">Low Lag</button>
+                <button class="btn btn-secondary jvm-preset" data-preset="-Xms2G -Xmx4G -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20" style="font-size:10px;padding:3px 8px;">Balanced</button>
+                <button class="btn btn-secondary jvm-preset" data-preset="-Xmx6G -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -XX:+UnlockExperimentalVMOptions" style="font-size:10px;padding:3px 8px;">Heavy Packs</button>
+              </div>
               <input type="text" id="input-jvm" class="jvm-input" placeholder="-Xmn1G -XX:+UseG1GC" spellcheck="false">
             </div>
 
@@ -433,6 +446,29 @@
                   <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                   <div><div>Backups</div><div>.crystall/backups</div></div>
                 </button>
+                <button class="folder-btn" id="btn-screenshots-folder">
+                  <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                  <div><div>Screenshots</div><div>.crystall/game/screenshots</div></div>
+                </button>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <h3 class="group-title" data-i18n="settings.backups">World Backups</h3>
+              <div class="toggle-row">
+                <div>
+                  <div class="toggle-label" data-i18n="settings.auto_backup">Auto-backup worlds on launch</div>
+                  <div class="toggle-desc" data-i18n="settings.auto_backup_desc">Keeps the most recent backups of each world</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" id="toggle-autobackup">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+                <label style="font-size:12px;color:var(--text-dim);" data-i18n="settings.backup_keep">Keep backups</label>
+                <input type="number" id="input-backup-keep" class="jvm-input" min="1" max="50" value="5" style="width:70px;">
+                <button class="btn btn-secondary" id="btn-browse-screenshots" style="font-size:11px;padding:4px 10px;" data-i18n="settings.open_screenshots">Browse Screenshots</button>
               </div>
             </div>
 
@@ -607,7 +643,9 @@
           <select id="wizard-loader" class="mods-filter-select" style="flex:1;">
             <option value="vanilla">Vanilla</option>
             <option value="fabric">Fabric</option>
+            <option value="quilt">Quilt</option>
             <option value="forge">Forge</option>
+            <option value="neoforge">NeoForge</option>
           </select>
           <select id="wizard-version" class="mods-filter-select" style="flex:1;"></select>
         </div>

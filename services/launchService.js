@@ -112,6 +112,51 @@ class LaunchService {
     return { name: customVersionName, json: versionJsonPath };
   }
 
+  async getLatestQuiltLoaderForMc(mcVersion) {
+    try {
+      const res = await axios.get(`https://meta.quiltmc.org/v2/versions/loader/${mcVersion}`, { timeout: 5000 });
+      const list = Array.isArray(res.data) ? res.data : [];
+      const stable = list.find((l) => (typeof l === 'object' ? l.version && l.stable !== false : true));
+      if (stable && typeof stable === 'object' && stable.version) return stable.version;
+      if (typeof stable === 'string') return stable;
+      if (list.length) return typeof list[0] === 'object' ? list[0].version : list[0];
+      return '0.28.0';
+    } catch { return '0.28.0'; }
+  }
+
+  async ensureQuiltVersion(mcVersion, loaderVersion) {
+    if (!loaderVersion) loaderVersion = await this.getLatestQuiltLoaderForMc(mcVersion);
+    const customVersionName = `quilt-loader-${loaderVersion}-${mcVersion}`;
+    const versionDir = path.join(this.gameDir, 'versions', customVersionName);
+    const versionJsonPath = path.join(versionDir, `${customVersionName}.json`);
+
+    if (!fs.existsSync(versionJsonPath)) {
+      fs.mkdirSync(versionDir, { recursive: true });
+      try {
+        const res = await axios.get(
+          `https://meta.quiltmc.org/v2/versions/loader/${mcVersion}/${loaderVersion}/profile/json`,
+          { timeout: 15000 }
+        );
+        fs.writeFileSync(versionJsonPath, JSON.stringify(res.data, null, 2));
+        return { name: customVersionName, json: versionJsonPath };
+      } catch (err) {
+        console.warn('Quilt profile fetch warning:', err.message);
+        try { fs.rmSync(versionDir, { recursive: true, force: true }); } catch {}
+        return null;
+      }
+    }
+    return { name: customVersionName, json: versionJsonPath };
+  }
+
+  getGameRoot(profile) {
+    if (profile && profile.isolate) {
+      const isolated = path.join(this.dataDir, 'instances', profile.id, 'game');
+      if (!fs.existsSync(isolated)) fs.mkdirSync(isolated, { recursive: true });
+      return isolated;
+    }
+    return this.gameDir;
+  }
+
   async ensureForgeVersion(mcVersion) {
     try {
       const forgeData = await versionService.getForgeVersions();
@@ -159,8 +204,9 @@ class LaunchService {
     }
   }
 
-  installOverlayMod(mcVersion) {
-    const modsDir = path.join(this.gameDir, 'mods');
+  installOverlayMod(mcVersion, gameRoot) {
+    const root = gameRoot || this.gameDir;
+    const modsDir = path.join(root, 'mods');
     if (!fs.existsSync(modsDir)) fs.mkdirSync(modsDir, { recursive: true });
     const overlayJar = typeof process !== 'undefined' && process.resourcesPath
       ? path.join(process.resourcesPath, 'crystallauncher-overlay.jar')
@@ -221,6 +267,7 @@ class LaunchService {
         const ram = profile.ram || 4;
         const loaderType = profile.loaderType || 'vanilla';
         const mcVersion = profile.mcVersion || '1.20.4';
+        const gameRoot = this.getGameRoot(profile);
 
         if (account?.type === 'microsoft' && account.refreshToken) {
           if (onStatus) onStatus('Refreshing session...');
@@ -245,7 +292,7 @@ class LaunchService {
         }
 
         const profileModsDir = profileService.getModsFolder(profile.id);
-        const gameModsDir = path.join(this.gameDir, 'mods');
+        const gameModsDir = path.join(gameRoot, 'mods');
         try {
           if (!fs.existsSync(gameModsDir)) fs.mkdirSync(gameModsDir, { recursive: true });
           for (const file of fs.readdirSync(gameModsDir)) fs.unlinkSync(path.join(gameModsDir, file));
@@ -256,15 +303,25 @@ class LaunchService {
           }
         } catch (err) { console.warn('Mod sync warning:', err.message); }
 
+        let extraJvmArgs = [];
+        try {
+          const settingsPath = path.join(this.dataDir, 'settings.json');
+          const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : {};
+          if (settings.jvmArgs) {
+            extraJvmArgs = String(settings.jvmArgs).match(/(?:[^\s"]+|"[^"]*")+/g)?.map((a) => a.replace(/^"|"$/g, '')) || [];
+          }
+        } catch {}
+
         const opts = {
           authorization: auth,
           javaPath: javaPath,
-          root: this.gameDir,
+          root: gameRoot,
           version: { number: mcVersion, type: 'release' },
           memory: { max: `${ram}G`, min: '1G' },
           customArgs: [
             '-Djava.net.preferIPv4Stack=true',
             '-Djava.net.preferIPv4Addresses=true',
+            ...extraJvmArgs,
           ],
         };
 
@@ -279,7 +336,14 @@ class LaunchService {
           if (onStatus) onStatus(`Fetching Fabric for ${mcVersion}...`);
           const fabric = await this.ensureFabricVersionManifest(mcVersion, profile.loaderVersion);
           opts.version.custom = fabric.name;
-          this.installOverlayMod(mcVersion);
+          this.installOverlayMod(mcVersion, gameRoot);
+        } else if (loaderType === 'quilt') {
+          if (onStatus) onStatus(`Fetching Quilt for ${mcVersion}...`);
+          const quilt = await this.ensureQuiltVersion(mcVersion, profile.loaderVersion);
+          if (quilt) {
+            opts.version.custom = quilt.name;
+            this.installOverlayMod(mcVersion, gameRoot);
+          }
         } else if (loaderType === 'forge') {
           if (onStatus) onStatus(`Preparing Forge for ${mcVersion}...`);
           const forge = await this.ensureForgeVersion(mcVersion);
