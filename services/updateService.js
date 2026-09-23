@@ -14,12 +14,20 @@ class UpdateService {
       if (manifestPath && fs.existsSync(manifestPath)) {
         const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
         if (m.version && this.compareVersions(m.version, CURRENT_VERSION) > 0) {
+          let downloadUrl = m.downloadUrl || '';
+          // Reject a local installer that does not match the advertised version
+          if (downloadUrl && (downloadUrl.includes('file://') || downloadUrl.match(/^[A-Z]:\\/i) || downloadUrl.startsWith('\\\\'))) {
+            const urlLower = downloadUrl.toLowerCase();
+            if (!urlLower.includes(String(m.version).toLowerCase()) || !fs.existsSync(downloadUrl.replace(/^file:\/\//i, ''))) {
+              downloadUrl = '';
+            }
+          }
           return {
             hasUpdate: true,
             version: m.version,
             currentVersion: CURRENT_VERSION,
             url: '',
-            downloadUrl: m.downloadUrl || '',
+            downloadUrl,
             body: m.body || '',
             buildId: m.buildId || 0,
           };
@@ -33,16 +41,20 @@ class UpdateService {
       });
       const tag = res.data.tag_name || res.data.name || '';
       const version = tag.replace(/^v/, '');
+      const downloadUrl = res.data.assets?.[0]?.browser_download_url || '';
+      // Never install an asset whose filename does not match the release version
+      const assetName = res.data.assets?.[0]?.name || '';
+      const versionOk = !assetName || assetName.toLowerCase().includes(String(version).toLowerCase()) || !assetName.includes('Setup');
       return {
         hasUpdate: this.compareVersions(version, CURRENT_VERSION) > 0,
         version,
         currentVersion: CURRENT_VERSION,
         url: res.data.html_url,
-        downloadUrl: res.data.assets?.[0]?.browser_download_url || '',
+        downloadUrl: versionOk ? downloadUrl : '',
         body: res.data.body || '',
       };
     } catch (err) {
-      const msg = err?.response?.status === 403 ? 'API rate limited â€” try again later' : (err?.message || 'Network error');
+      const msg = err?.response?.status === 403 ? 'API rate limited — try again later' : (err?.message || 'Network error');
       return { hasUpdate: false, version: CURRENT_VERSION, currentVersion: CURRENT_VERSION, url: '', downloadUrl: '', body: '', error: msg };
     }
   }
