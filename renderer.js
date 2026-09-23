@@ -137,7 +137,7 @@ function toast(title, msg, type = 'success', duration = 7000) {
 
 function saveSettings() {
   const accent = document.querySelector('.accent-swatch.active')?.dataset.color || $('accent-custom')?.value || '#6c8cff';
-  window.api.saveSettings({ activeAccountId, activeProfileId, lastLoader: currentLoader, lastVersion: currentVersion, defaultRam: currentRam, jvmArgs: currentJvm, keepLauncherOpen: currentKeepOpen, language: currentLang, discordRpc: $('toggle-rpc')?.checked ?? true, accentColor: accent, javaPath: ($('input-java-path')?.value || '').trim(), autoBackup: $('toggle-autobackup')?.checked ?? false, backupKeep: parseInt($('input-backup-keep')?.value, 10) || 5 });
+  window.api.saveSettings({ activeAccountId, activeProfileId, lastLoader: currentLoader, lastVersion: currentVersion, defaultRam: currentRam, jvmArgs: currentJvm, keepLauncherOpen: currentKeepOpen, language: currentLang, discordRpc: $('toggle-rpc')?.checked ?? true, accentColor: accent, javaPath: ($('input-java-path')?.value || '').trim(), autoBackup: $('toggle-autobackup')?.checked ?? false, backupKeep: parseInt($('input-backup-keep')?.value, 10) || 5, activeSkinName, skinModelType });
 }
 
 async function updateActiveProfile() {
@@ -1294,6 +1294,21 @@ $('btn-play').onclick = async function () {
   $('progress-text').textContent = 'Checking Java 21+...';
   $('progress-fill').style.width = '0%';
 
+  // Re-apply selected skin before launch so it is live in Minecraft (throttled)
+  try {
+    const activeAccount = accounts.find((a) => a.id === activeAccountId);
+    if (activeAccount?.type === 'microsoft' && Date.now() - lastSkinApplyAt > 60000) {
+      let skinPath = 'default';
+      if (activeSkinName && activeSkinName !== 'default') {
+        const skins = await window.api.getSavedSkins();
+        const sel = skins.find((s) => s.name === activeSkinName);
+        if (sel?.path) skinPath = sel.path;
+      }
+      const applied = await applyActiveSkinToMinecraft(skinPath);
+      if (!applied.success) console.warn('Pre-launch skin apply failed:', applied.error);
+    }
+  } catch (skinErr) { console.warn('Pre-launch skin apply error:', skinErr); }
+
   let launchProfile = profiles.find((p) => p.id === activeProfileId);
   if (!launchProfile || launchProfile.loaderType !== currentLoader || launchProfile.mcVersion !== currentVersion) {
     launchProfile = { id: activeProfileId || 'transient', name: `${loaderNames[currentLoader]} ${currentVersion}`, loaderType: currentLoader, mcVersion: currentVersion, ram: currentRam };
@@ -1555,6 +1570,11 @@ async function init() {
     if (settings.jvmArgs !== undefined) currentJvm = settings.jvmArgs;
     if (settings.keepLauncherOpen !== undefined) currentKeepOpen = settings.keepLauncherOpen;
     if (settings.language) await setLanguage(settings.language);
+    if (settings.activeSkinName) activeSkinName = settings.activeSkinName;
+    if (settings.skinModelType) {
+      skinModelType = settings.skinModelType === 'classic' ? 'classic' : 'slim';
+      document.querySelectorAll('.model-btn').forEach((b) => b.classList.toggle('active', b.dataset.model === skinModelType));
+    }
 
     document.querySelectorAll('.ram-btn').forEach((b) => b.classList.toggle('active', parseInt(b.dataset.ram) === currentRam));
     $('input-jvm').value = currentJvm;
@@ -1660,6 +1680,13 @@ async function init() {
 let currentSkins = [];
 let activeSkinName = 'default';
 let skinModelType = 'slim';
+let lastSkinApplyAt = 0;
+
+async function applyActiveSkinToMinecraft(skinPath) {
+  const result = await window.api.applyMicrosoftSkin(skinPath, skinModelType, activeAccountId);
+  if (result?.success) lastSkinApplyAt = Date.now();
+  return result;
+}
 
 // === 3D Skin Viewer (skinview3d WebGL) ===
 let skinViewer = null;
@@ -1759,8 +1786,8 @@ function renderSkinList() {
     renderSkinList();
     if (activeAccount?.type === 'microsoft') {
       toast('Resetting skin...', 'Applying default via Minecraft API');
-      const apply = await window.api.applyMicrosoftSkin('default', skinModelType);
-      if (apply.success) toast('Skin reset', 'Default skin applied to Minecraft account');
+      const apply = await applyActiveSkinToMinecraft('default');
+      if (apply.success) toast('Skin reset', 'Default skin applied — shows in Minecraft immediately');
       else toast('Reset failed', apply.error, 'error');
     }
   };
@@ -1778,8 +1805,8 @@ function renderSkinList() {
       renderSkinList();
       if (activeAccount?.type === 'microsoft' && s.path) {
         toast('Applying skin...', `Uploading "${s.name}" to Minecraft API`);
-        const apply = await window.api.applyMicrosoftSkin(s.path, skinModelType);
-        if (apply.success) toast('Skin applied', `Applied "${s.name}" to your Minecraft account`);
+        const apply = await applyActiveSkinToMinecraft(s.path);
+        if (apply.success) toast('Skin applied', `"${s.name}" is live in Minecraft`);
         else toast('Skin upload failed', apply.error, 'error');
       }
     };
@@ -1822,11 +1849,12 @@ $('skin-reset-btn').onclick = async () => {
   activeSkinName = 'default';
   loadSkinToPreview('default', null);
   renderSkinList();
+  saveSettings();
   const active = accounts.find((a) => a.id === activeAccountId);
   if (active?.type === 'microsoft') {
     toast('Resetting skin...', 'Applying default via Mojang API');
-    const apply = await window.api.applyMicrosoftSkin('default', 'classic');
-    if (apply.success) toast('Skin reset', 'Default skin applied');
+    const apply = await applyActiveSkinToMinecraft('default');
+    if (apply.success) toast('Skin reset', 'Default skin applied — shows in Minecraft immediately');
     else toast('Reset failed', apply.error, 'error');
   }
 };
@@ -1846,14 +1874,15 @@ $('skin-file-input').onchange = async function () {
       currentSkins = await window.api.getSavedSkins();
       renderSkinList();
       loadSkinToPreview(name, base64);
+      saveSettings();
       const active = accounts.find((a) => a.id === activeAccountId);
       if (active?.type === 'microsoft') {
-        toast('Applying skin...', 'Uploading to Mojang API');
-        const apply = await window.api.applyMicrosoftSkin(result.path, skinModelType === 'slim' ? 'slim' : 'classic');
+        toast('Applying skin...', 'Uploading to Minecraft API — will show in-game');
+        const apply = await applyActiveSkinToMinecraft(result.path);
         if (apply.success) toast('Skin applied', 'Your Minecraft skin has been updated');
         else toast('Skin upload failed', apply.error, 'error');
       } else {
-        toast('Skin saved', 'Saved locally. Use a skin mod to apply it.');
+        toast('Skin saved', 'Saved locally. Sign in with Microsoft to auto-apply in Minecraft.');
       }
     } else {
       toast('Error', result.error, 'error');
@@ -1880,16 +1909,17 @@ async function handleModelToggle(newModel) {
   if (activeAccount?.type === 'microsoft') {
     if (activeSkinName === 'default') {
       toast('Updating model...', 'Setting model variant via Minecraft API');
-      const apply = await window.api.applyMicrosoftSkin('default', skinModelType);
+      const apply = await applyActiveSkinToMinecraft('default');
       if (apply.success) toast('Model updated', `Set model variant to ${skinModelType}`);
       else toast('Update failed', apply.error, 'error');
     } else if (activeSkin?.path) {
       toast('Updating model...', `Setting ${skinModelType} model via Minecraft API`);
-      const apply = await window.api.applyMicrosoftSkin(activeSkin.path, skinModelType);
+      const apply = await applyActiveSkinToMinecraft(activeSkin.path);
       if (apply.success) toast('Model updated', `Updated to ${skinModelType} model variant`);
       else toast('Update failed', apply.error, 'error');
     }
   }
+  saveSettings();
 }
 
 $('skin-model-classic').onclick = () => handleModelToggle('classic');
@@ -1916,13 +1946,14 @@ $('skin-namemc-btn').onclick = async () => {
         currentSkins = await window.api.getSavedSkins();
         renderSkinList();
         loadSkinToPreview(name, result.base64);
+        saveSettings();
         toast('Skin fetched', `Loaded ${name}'s skin from NameMC`);
         input.value = '';
 
         const activeAccount = accounts.find((a) => a.id === activeAccountId);
         if (activeAccount?.type === 'microsoft' && saveResult.path) {
           toast('Applying skin...', 'Uploading NameMC skin to Minecraft API');
-          const apply = await window.api.applyMicrosoftSkin(saveResult.path, skinModelType);
+          const apply = await applyActiveSkinToMinecraft(saveResult.path);
           if (apply.success) toast('Skin applied', 'Your Minecraft account skin has been updated!');
           else toast('Skin upload failed', apply.error, 'error');
         }

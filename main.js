@@ -52,8 +52,8 @@ function ensureDataDir() {
 
 function getSavedSettings() {
   ensureDataDir();
-  try { return { activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, javaPath: '', autoBackup: false, backupKeep: 5, ...JSON.parse(fs.readFileSync(settingsFile, 'utf8')) }; }
-  catch { return { activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, javaPath: '', autoBackup: false, backupKeep: 5 }; }
+  try { return { activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, javaPath: '', autoBackup: false, backupKeep: 5, activeSkinName: 'default', skinModelType: 'slim', ...JSON.parse(fs.readFileSync(settingsFile, 'utf8')) }; }
+  catch { return { activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, javaPath: '', autoBackup: false, backupKeep: 5, activeSkinName: 'default', skinModelType: 'slim' }; }
 }
 
 function saveSettingsToStore(newSettings) {
@@ -422,7 +422,7 @@ function getPlaytimeSessions() {
 }
 
 ipcMain.handle('check-updates', async () => updateService.checkForUpdates());
-ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return '1.4.16'; } });
+ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return '1.4.17'; } });
 
 ipcMain.handle('get-saved-skins', async () => {
   const skinDir = path.join(baseDataDir, 'skins');
@@ -501,12 +501,17 @@ ipcMain.handle('fetch-namemc-skin', async (e, username) => {
   }
 });
 
-ipcMain.handle('apply-microsoft-skin', async (e, { skinPath, variant }) => {
+ipcMain.handle('apply-microsoft-skin', async (e, { skinPath, variant, accountId }) => {
   try {
     const accounts = getSavedAccounts();
-    const active = accounts.find((a) => a.id === activeAccountId) || accounts[0];
+    const settings = getSavedSettings();
+    const wantedId = accountId || settings.activeAccountId;
+    let active = accounts.find((a) => a.id === wantedId);
     if (!active || active.type !== 'microsoft' || !active.accessToken) {
-      return { success: false, error: 'No active Microsoft account logged in.' };
+      active = accounts.find((a) => a.type === 'microsoft' && a.accessToken) || null;
+    }
+    if (!active) {
+      return { success: false, error: 'No Microsoft account logged in. Sign in with Microsoft to auto-apply skins in Minecraft.' };
     }
 
     const doUpload = async (token) => {
@@ -565,7 +570,7 @@ ipcMain.handle('apply-microsoft-skin', async (e, { skinPath, variant }) => {
     }
 
     if (res.ok) {
-      return { success: true };
+      return { success: true, account: active.name };
     } else {
       let msg = res.body;
       try {
