@@ -1539,3 +1539,31 @@ html, body {
 .update-progress { margin-top: 16px; }
 .update-progress-fill { height: 4px; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
 .update-progress-text { font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+
+/* Preflight status row above the Play button */
+.preflight {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 16px 0 0;
+  padding: 9px 13px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.pf-item { display: inline-flex; align-items: center; gap: 6px; }
+.pf-item::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #4ade80;
+  flex: 0 0 auto;
+}
+.pf-item.warn { color: #ffbd2e; }
+.pf-item.warn::before { background: #ffbd2e; }
+.pf-item.bad { color: #ff5f56; }
+.pf-item.bad::before { background: #ff5f56; }
+.pf-item.hidden { display: none; }

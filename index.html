@@ -156,6 +156,13 @@
             </div>
           </div>
 
+          <div class="preflight" id="preflight">
+            <span class="pf-item" id="pf-java">Java …</span>
+            <span class="pf-item" id="pf-ram">RAM …</span>
+            <span class="pf-item" id="pf-mods">Mods …</span>
+            <span class="pf-item" id="pf-disk">Disk …</span>
+          </div>
+
           <div class="launch-panel">
             <div class="summary">
               <div class="summary-name" id="summary-name">Vanilla Minecraft</div>
@@ -530,6 +537,15 @@
               </div>
               <button class="btn btn-secondary" id="btn-check-updates" style="font-size:11px;padding:4px 12px;width:fit-content;" data-i18n="settings.check_updates">Check for Updates</button>
               <div id="update-status" style="font-size:11px;color:var(--text-dim);"></div>
+              <button class="btn btn-secondary" id="btn-rollback" style="font-size:11px;padding:4px 12px;width:fit-content;display:none;" data-i18n="settings.rollback">Roll back to previous version</button>
+              <div id="rollback-status" style="font-size:11px;color:var(--text-dim);"></div>
+            </div>
+
+            <div class="settings-group">
+              <h3 class="group-title" data-i18n="settings.maintenance">Maintenance</h3>
+              <div class="toggle-desc" data-i18n="settings.repair_desc">Checks libraries and assets against their hashes and re-downloads anything broken.</div>
+              <button class="btn btn-secondary" id="btn-repair" style="font-size:11px;padding:4px 12px;width:fit-content;margin-top:8px;" data-i18n="settings.repair">Repair installation</button>
+              <div id="repair-status" style="font-size:11px;color:var(--text-dim);margin-top:6px;"></div>
             </div>
           </div>
         </div>
@@ -674,6 +690,8 @@
       </div>
       <pre id="crash-log-content" style="background:var(--bg-deep);color:var(--text-dim);padding:12px;border-radius:var(--radius-sm);font-size:11px;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:12px 0;font-family:monospace;"></pre>
       <div class="modal-actions">
+        <button class="btn btn-secondary" id="crash-disable-latest" data-i18n="crash.disable_latest">Disable latest mod &amp; retry</button>
+        <button class="btn btn-secondary" id="crash-disable-all" data-i18n="crash.disable_all">Start without mods</button>
         <button class="btn btn-secondary" onclick="document.getElementById('modal-crash-log').classList.remove('active')" data-i18n="profiles.cancel">Close</button>
       </div>
     </div>

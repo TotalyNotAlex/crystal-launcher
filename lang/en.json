@@ -26,6 +26,9 @@
   "play.prepare": "Preparing...",
   "play.search_version": "Search version...",
 
+  "crash.disable_latest": "Disable latest mod & retry",
+  "crash.disable_all": "Start without mods",
+
   "mods.browse": "Browse",
   "mods.curseforge": "CurseForge",
   "mods.modpacks": "Modpacks",
@@ -141,6 +144,10 @@
   "settings.discord_rpc": "Discord Rich Presence",
   "settings.accent": "Accent Color",
   "settings.accent_desc": "Customize the launcher look",
+  "settings.maintenance": "Maintenance",
+  "settings.repair": "Repair installation",
+  "settings.repair_desc": "Checks libraries and assets against their hashes and re-downloads anything broken.",
+  "settings.rollback": "Roll back to previous version",
 
   "servers.title": "Servers",
   "servers.subtitle": "Manage your favorite servers",

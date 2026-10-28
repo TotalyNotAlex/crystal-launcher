@@ -36,6 +36,8 @@ const updateService = require('./services/updateService');
 const rpcService = require('./services/rpcService');
 const serverPingService = require('./services/serverPingService');
 const crashAnalyzer = require('./services/crashAnalyzer');
+const repairService = require('./services/repairService');
+const os = require('os');
 let bgUpdatePath = null;
 
 let mainWindow = null;
@@ -495,6 +497,128 @@ function getPlaytimeSessions() {
   try { return JSON.parse(fs.readFileSync(playtimeFile, 'utf8')); }
   catch { return []; }
 }
+
+// --- Crash recovery -------------------------------------------------------
+// Disabling the newest mod (or all of them) is the fix that actually gets a
+// player back into the game after a mod-caused crash.
+ipcMain.handle('crash-recovery', async (e, { profileId, action }) => {
+  try {
+    const profiles = profileService.getProfiles();
+    const profile = profiles.find((p) => p.id === profileId) || profiles[0];
+    if (!profile) return { success: false, error: 'No profile found' };
+    const modsDir = profileService.getModsFolder(profile.id);
+    const jars = fs.readdirSync(modsDir).filter((f) => f.endsWith('.jar'));
+    if (!jars.length) return { success: true, disabled: 0, names: [], message: 'No enabled mods in this profile' };
+    const newestFirst = jars
+      .map((file) => ({ file, mtime: fs.statSync(path.join(modsDir, file)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+    const targets = action === 'disable-all' ? newestFirst : newestFirst.slice(0, 1);
+    for (const { file } of targets) {
+      fs.renameSync(path.join(modsDir, file), path.join(modsDir, `${file}.disabled`));
+    }
+    return { success: true, disabled: targets.length, names: targets.map((t) => t.file) };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+// --- Preflight ------------------------------------------------------------
+// One compact status row instead of a new screen: is Java there, does the RAM
+// fit, how many mods are active, is there disk space left.
+ipcMain.handle('preflight-check', async (e, { profileId }) => {
+  try {
+    const profiles = profileService.getProfiles();
+    const profile = profiles.find((p) => p.id === profileId) || profiles[0];
+    if (!profile) return { success: false, error: 'No profile found' };
+    const settings = getSavedSettings();
+    const java = checkJava();
+    const totalRamGB = Math.round((os.totalmem() / 1024 ** 3) * 10) / 10;
+    const ram = Number(profile.ram || settings.defaultRam || 4);
+    let mods = { enabled: 0, disabled: 0 };
+    try {
+      const list = profileService.listMods(profile.id);
+      mods = { enabled: list.filter((m) => m.enabled).length, disabled: list.filter((m) => !m.enabled).length };
+    } catch {}
+    let freeGB = null;
+    try {
+      const gameRoot = launchService.getGameRoot(profile);
+      // The folder may not exist before the first launch - create it so the
+      // disk check has something to measure.
+      if (!fs.existsSync(gameRoot)) fs.mkdirSync(gameRoot, { recursive: true });
+      const stat = fs.statfsSync(gameRoot);
+      freeGB = Math.round(((stat.bavail * stat.bsize) / 1024 ** 3) * 10) / 10;
+    } catch {}
+    const warnings = [];
+    if (!java.found) warnings.push('java');
+    if (ram > totalRamGB) warnings.push('ram');
+    if (freeGB !== null && freeGB < 5) warnings.push('disk');
+    return {
+      success: true,
+      java: { found: !!java.found, major: java.major || null },
+      ram: { value: ram, total: totalRamGB },
+      mods,
+      freeGB,
+      warnings,
+    };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+// --- Repair ---------------------------------------------------------------
+ipcMain.handle('repair-installation', async (e, { profileId }) => {
+  try {
+    const profiles = profileService.getProfiles();
+    const profile = profiles.find((p) => p.id === profileId) || profiles[0];
+    if (!profile) return { success: false, error: 'No profile found' };
+    const gameRoot = launchService.getGameRoot(profile);
+    const result = await repairService.repairProfile({
+      gameRoot,
+      profile,
+      onProgress: (p) => e.sender.send('repair-progress', p),
+    });
+    return result;
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+// --- Rollback -------------------------------------------------------------
+ipcMain.handle('get-previous-release', async () => {
+  try {
+    const current = app.getVersion();
+    const res = await axios.get('https://api.github.com/repos/TotalyNotAlex/crystal-launcher/releases?per_page=30', {
+      headers: { 'User-Agent': 'CrystalLauncher', Accept: 'application/vnd.github+json' },
+      timeout: 10000,
+    });
+    const releases = (Array.isArray(res.data) ? res.data : [])
+      .filter((r) => r && !r.draft && !r.prerelease && r.tag_name)
+      .map((r) => ({ ...r, version: String(r.tag_name).replace(/^v/i, '') }))
+      .filter((r) => /^\d+\.\d+/.test(r.version))
+      .sort((a, b) => updateService.compareVersions(b.version, a.version));
+    const older = releases.find((r) => updateService.compareVersions(r.version, current) < 0);
+    if (!older) return { success: true, release: null };
+    const assets = older.assets || [];
+    const installer = assets.find((a) => /\.exe$/i.test(a.name) && /setup/i.test(a.name))
+      || assets.find((a) => /\.exe$/i.test(a.name));
+    if (!installer) return { success: true, release: null };
+    return {
+      success: true,
+      currentVersion: current,
+      release: { version: older.version, downloadUrl: installer.browser_download_url, notes: older.body || '' },
+    };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+ipcMain.handle('install-release', async (e, { downloadUrl, version }) => {
+  try {
+    if (!downloadUrl) return { success: false, error: 'No download URL' };
+    const dest = path.join(baseDataDir, 'rollback_setup.exe');
+    if (fs.existsSync(dest)) { try { fs.unlinkSync(dest); } catch {} }
+    e.sender.send('update-progress', { percent: 0, status: `Downloading ${version || 'installer'}...` });
+    await updateService.downloadUpdate(downloadUrl, dest, (pct) => {
+      e.sender.send('update-progress', { percent: pct, status: `Downloading... ${pct}%` });
+    });
+    fs.writeFileSync(path.join(baseDataDir, '.updated'), '1');
+    spawn(dest, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    setTimeout(() => { mainWindow?.destroy(); app.quit(); }, 4000);
+    return { success: true };
+  } catch (err) { return { success: false, error: err.message }; }
+});
 
 ipcMain.handle('check-updates', async () => updateService.checkForUpdates());
 ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return require('./package.json').version; } });

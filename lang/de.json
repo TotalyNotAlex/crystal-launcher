@@ -26,6 +26,9 @@
   "play.prepare": "Vorbereiten...",
   "play.search_version": "Version suchen...",
 
+  "crash.disable_latest": "Neuesten Mod deaktivieren & neu starten",
+  "crash.disable_all": "Ohne Mods starten",
+
   "mods.browse": "Durchsuchen",
   "mods.modpacks": "Modpakete",
   "mods.installed": "Installiert",
@@ -140,6 +143,10 @@
   "settings.discord_rpc": "Discord Rich Presence",
   "settings.accent": "Akzentfarbe",
   "settings.accent_desc": "Das Aussehen des Launchers anpassen",
+  "settings.maintenance": "Wartung",
+  "settings.repair": "Installation reparieren",
+  "settings.repair_desc": "Prüft Libraries und Assets gegen ihre Hashes und lädt Beschädigtes neu.",
+  "settings.rollback": "Auf vorherige Version zurück",
 
   "news.title": "News",
   "news.subtitle": "Aktuelle Minecraft-News",

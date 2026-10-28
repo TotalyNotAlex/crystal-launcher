@@ -43,6 +43,13 @@ contextBridge.exposeInMainWorld('api', {
   modrinthInstallModpack: (projectId, versionId, profileId) => ipcRenderer.invoke('modrinth-install-modpack', { projectId, versionId, profileId }),
 
   getCrashLogs: () => ipcRenderer.invoke('get-crash-logs'),
+  crashRecovery: (profileId, action) => ipcRenderer.invoke('crash-recovery', { profileId, action }),
+
+  preflightCheck: (profileId) => ipcRenderer.invoke('preflight-check', { profileId }),
+  repairInstallation: (profileId) => ipcRenderer.invoke('repair-installation', { profileId }),
+  onRepairProgress: (cb) => ipcRenderer.on('repair-progress', (e, d) => cb(d)),
+  getPreviousRelease: () => ipcRenderer.invoke('get-previous-release'),
+  installRelease: (downloadUrl, version) => ipcRenderer.invoke('install-release', { downloadUrl, version }),
 
   getNews: () => ipcRenderer.invoke('get-news'),
 

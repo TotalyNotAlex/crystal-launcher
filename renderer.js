@@ -2088,5 +2088,137 @@ window.api.onUpdateProgress?.((p) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Preflight status line above Play
+// ---------------------------------------------------------------------------
+async function updatePreflight() {
+  try {
+    const res = await window.api.preflightCheck(activeProfileId);
+    if (!res || !res.success) return;
+    const set = (id, text, level) => {
+      const el = $(id);
+      if (!el) return;
+      el.classList.remove('hidden');
+      el.textContent = text;
+      el.className = `pf-item${level ? ` ${level}` : ''}`;
+    };
+    set('pf-java', res.java.found ? `Java ${res.java.major}` : 'Java 21 missing', res.java.found ? '' : 'bad');
+    const ramLevel = res.ram.value > res.ram.total ? 'bad' : res.ram.value > res.ram.total * 0.75 ? 'warn' : '';
+    set('pf-ram', `RAM ${res.ram.value} / ${res.ram.total} GB`, ramLevel);
+    if (res.mods.enabled || res.mods.disabled) {
+      const off = res.mods.disabled ? ` · ${res.mods.disabled} off` : '';
+      set('pf-mods', `${res.mods.enabled} mods${off}`, res.mods.disabled ? 'warn' : '');
+    } else {
+      set('pf-mods', 'No mods', '');
+    }
+    if (res.freeGB === null) {
+      const el = $('pf-disk');
+      if (el) el.classList.add('hidden');
+    } else {
+      set('pf-disk', `${res.freeGB} GB free`, res.freeGB < 5 ? 'bad' : res.freeGB < 15 ? 'warn' : '');
+    }
+  } catch {}
+}
+
+// ---------------------------------------------------------------------------
+// Repair installation
+// ---------------------------------------------------------------------------
+const repairBtn = $('btn-repair');
+if (repairBtn) {
+  let repairRunning = false;
+  window.api.onRepairProgress?.((p) => {
+    const status = $('repair-status');
+    if (!status || !p) return;
+    status.textContent = p.phase === 'check'
+      ? `Checking files... ${p.current} / ${p.total}`
+      : `Downloading repairs... ${p.current} / ${p.total}`;
+  });
+  repairBtn.onclick = async () => {
+    if (repairRunning) return;
+    repairRunning = true;
+    repairBtn.disabled = true;
+    const status = $('repair-status');
+    if (status) status.textContent = 'Checking libraries and assets...';
+    try {
+      const res = await window.api.repairInstallation(activeProfileId);
+      const el = $('repair-status');
+      if (!res || !res.success) {
+        if (el) el.textContent = (res && res.error) || 'Repair failed';
+      } else if (!res.checked) {
+        if (el) el.textContent = 'Nothing to check.';
+      } else if (!res.broken) {
+        if (el) el.textContent = `All ${res.checked} files are intact.`;
+      } else {
+        const failed = res.failed ? ` ${res.failed} could not be repaired.` : '';
+        if (el) el.textContent = `Repaired ${res.repaired} of ${res.broken} broken files (${res.checked} checked).${failed}`;
+      }
+      updatePreflight();
+    } catch (err) {
+      const el = $('repair-status');
+      if (el) el.textContent = err.message;
+    } finally {
+      repairRunning = false;
+      repairBtn.disabled = false;
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Crash recovery: disable the newest mod, or all of them, then retry
+// ---------------------------------------------------------------------------
+(() => {
+  const run = async (action, btn) => {
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    try {
+      const res = await window.api.crashRecovery(activeProfileId, action);
+      if (!res.success) { toast('Crash recovery', res.error || 'Failed', 'error'); return; }
+      if (!res.disabled) { toast('Crash recovery', res.message || 'No enabled mods', 'info'); return; }
+      toast('Crash recovery', action === 'disable-all'
+        ? `Disabled ${res.disabled} mods - restarting`
+        : `Disabled ${res.names[0]} - restarting`);
+      document.getElementById('modal-crash-log')?.classList.remove('active');
+      if (typeof loadMods === 'function' && activeProfileId) loadMods(activeProfileId);
+      updatePreflight();
+      setTimeout(() => $('btn-play')?.click(), 500);
+    } finally {
+      btn.disabled = false;
+    }
+  };
+  const latest = $('crash-disable-latest');
+  const all = $('crash-disable-all');
+  if (latest) latest.onclick = () => run('disable-latest', latest);
+  if (all) all.onclick = () => run('disable-all', all);
+})();
+
+// ---------------------------------------------------------------------------
+// Rollback to the previous published release
+// ---------------------------------------------------------------------------
+(async () => {
+  try {
+    const res = await window.api.getPreviousRelease();
+    const btn = $('btn-rollback');
+    if (!btn || !res || !res.success || !res.release) return;
+    btn.style.display = 'block';
+    btn.textContent = `Roll back to ${res.release.version}`;
+    btn.onclick = async () => {
+      if (!window.confirm(`Install Crystal Launcher ${res.release.version} and restart?`)) return;
+      btn.disabled = true;
+      const status = $('rollback-status');
+      if (status) status.textContent = `Downloading ${res.release.version}...`;
+      const r = await window.api.installRelease(res.release.downloadUrl, res.release.version);
+      if (!r.success) {
+        if (status) status.textContent = r.error || 'Rollback failed';
+        btn.disabled = false;
+      }
+    };
+  } catch {}
+})();
+
+document.querySelectorAll('.nav-item[data-view="play"]').forEach((el) => {
+  el.addEventListener('click', () => setTimeout(updatePreflight, 150));
+});
+setTimeout(updatePreflight, 1200);
+
 initSettings();
 init();
