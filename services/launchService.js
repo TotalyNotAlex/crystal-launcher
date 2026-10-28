@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const axios = require('axios');
 const { app } = require('electron');
 const { Client, Authenticator } = require('minecraft-launcher-core');
@@ -239,29 +240,97 @@ class LaunchService {
     try { fs.copyFileSync(overlayJar, target); console.log('Overlay mod installed to', target); } catch (err) { console.warn('Failed to install overlay mod:', err.message); }
   }
 
-    async ensureNeoForgeVersion(mcVersion) {
+    // ForgeWrapper (used by minecraft-launcher-core) cannot resolve classifier
+  // artifacts such as "binarypatcher:2.1.2:fatjar" and then looks for
+  // "binarypatcher-2.1.2-fatjar.jar.jar". Running the official installer once
+  // avoids that path entirely and produces a normal version JSON.
+  async installNeoForgeWithInstaller(mcVersion, buildNumber, javaPath, onStatus) {
+    // The official installer names the version after the build only
+    // ("neoforge-21.1.265"); the launcher's own naming is the fallback.
+    const candidates = [
+      `neoforge-${buildNumber}`,
+      `neoforge-${mcVersion}-${buildNumber}`,
+    ];
+    const jsonFor = (name) => path.join(this.gameDir, 'versions', name, `${name}.json`);
+    const existing = candidates.find((name) => fs.existsSync(jsonFor(name)));
+    if (existing) return { name: existing, json: jsonFor(existing) };
+
+    const versionName = candidates[0];
+    const installerPath = path.join(this.gameDir, `neoforge-${mcVersion}-${buildNumber}-installer.jar`);
+    if (!fs.existsSync(installerPath)) {
+      const installerUrl = `https://maven.neoforged.net/releases/net/neoforged/neoforge/${buildNumber}/neoforge-${buildNumber}-installer.jar`;
+      const res = await axios.get(installerUrl, { responseType: 'arraybuffer', timeout: 120000 });
+      fs.writeFileSync(installerPath, res.data);
+    }
+
+    // The installer refuses to run without a launcher profile in the target.
+    const profilesFile = path.join(this.gameDir, 'launcher_profiles.json');
+    if (!fs.existsSync(profilesFile)) {
+      fs.writeFileSync(profilesFile, JSON.stringify({
+        profiles: {},
+        selectedProfile: '',
+        clientToken: '',
+        authenticationDatabase: {},
+        launcherVersion: { name: '21', format: 21 },
+      }, null, 2));
+    }
+
+    if (onStatus) onStatus(`Installing NeoForge ${buildNumber}...`);
+    await new Promise((resolve, reject) => {
+      const proc = spawn(javaPath, ['-jar', installerPath, '--installClient', this.gameDir], {
+        windowsHide: true,
+        cwd: this.gameDir,
+      });
+      let output = '';
+      const timer = setTimeout(() => {
+        try { proc.kill(); } catch {}
+        reject(new Error('NeoForge installer timed out after 10 minutes'));
+      }, 10 * 60 * 1000);
+      proc.stdout.on('data', (d) => { output += d.toString(); });
+      proc.stderr.on('data', (d) => { output += d.toString(); });
+      proc.on('error', (err) => { clearTimeout(timer); reject(err); });
+      proc.on('close', (code) => {
+        clearTimeout(timer);
+        if (code === 0) resolve(output);
+        else {
+          const tail = output.trim().split(/\r?\n/).slice(-6).join(' | ');
+          reject(new Error(`NeoForge installer failed (exit ${code})${tail ? `: ${tail}` : ''}`));
+        }
+      });
+    });
+
+    const installed = candidates.find((name) => fs.existsSync(jsonFor(name)));
+    if (!installed) {
+      throw new Error(`NeoForge installer finished but no version JSON was created (looked for ${candidates.join(', ')})`);
+    }
+    return { name: installed, json: jsonFor(installed) };
+  }
+
+  async ensureNeoForgeVersion(mcVersion, javaPath, onStatus) {
     try {
       const neoforgeData = await versionService.getNeoForgeVersions();
       const buildNumber = neoforgeData.neoforgeMap[mcVersion];
       if (!buildNumber) return null;
 
-      const versionName = `neoforge-${mcVersion}-${buildNumber}`;
-      const versionDir = path.join(this.gameDir, 'versions', versionName);
-      const versionJsonPath = path.join(versionDir, `${versionName}.json`);
-
-      if (!fs.existsSync(versionJsonPath)) {
-        fs.mkdirSync(versionDir, { recursive: true });
-        
-        const installerUrl = `https://maven.neoforged.net/releases/net/neoforged/neoforge/${buildNumber}/neoforge-${buildNumber}-installer.jar`;
-        const installerPath = path.join(this.gameDir, `${versionName}-installer.jar`);
-        
-        if (!fs.existsSync(installerPath)) {
-          const res = await axios.get(installerUrl, { responseType: 'arraybuffer', timeout: 60000 });
-          fs.writeFileSync(installerPath, res.data);
+      // Preferred path: install with the official installer so the resulting
+      // version JSON can be launched directly.
+      if (javaPath) {
+        try {
+          return await this.installNeoForgeWithInstaller(mcVersion, buildNumber, javaPath, onStatus);
+        } catch (installErr) {
+          console.warn('NeoForge installer failed, falling back to ForgeWrapper:', installErr.message);
         }
-        return { name: versionName, json: null, installer: installerPath };
       }
-      return { name: versionName, json: versionJsonPath };
+
+      // Fallback: let minecraft-launcher-core run the installer through
+      // ForgeWrapper (works for builds without classifier artifacts).
+      const installerPath = path.join(this.gameDir, `${versionName}-installer.jar`);
+      if (!fs.existsSync(installerPath)) {
+        const installerUrl = `https://maven.neoforged.net/releases/net/neoforged/neoforge/${buildNumber}/neoforge-${buildNumber}-installer.jar`;
+        const res = await axios.get(installerUrl, { responseType: 'arraybuffer', timeout: 60000 });
+        fs.writeFileSync(installerPath, res.data);
+      }
+      return { name: versionName, json: null, installer: installerPath };
     } catch (err) {
       console.warn('NeoForge setup warning:', err.message);
       return null;
@@ -373,7 +442,7 @@ class LaunchService {
           }
         } else if (loaderType === 'neoforge') {
           if (onStatus) onStatus(`Preparing NeoForge for ${mcVersion}...`);
-          const neoforge = await this.ensureNeoForgeVersion(mcVersion);
+          const neoforge = await this.ensureNeoForgeVersion(mcVersion, javaPath, onStatus);
           if (neoforge) {
             if (neoforge.json) opts.version.custom = neoforge.name;
             if (neoforge.installer) opts.forge = neoforge.installer;
