@@ -2,6 +2,19 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
+// Write through a temp file + rename so a crash mid-write cannot leave a
+// truncated profiles.json (which would silently wipe every profile).
+function writeProfilesAtomic(file, profiles) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(profiles, null, 2), 'utf8');
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    console.error('Error writing profiles:', err.message);
+    try { fs.unlinkSync(tmp); } catch {}
+  }
+}
+
 class ProfileService {
   constructor() {
     this.baseDir = path.join(app ? app.getPath('userData') : process.cwd(), '.crystall');
@@ -18,7 +31,7 @@ class ProfileService {
         { id: 'default-vanilla', name: 'Vanilla 1.20.4', mcVersion: '1.20.4', loaderType: 'vanilla', loaderVersion: '', ram: 4, created: Date.now() },
         { id: 'default-fabric', name: 'Fabric 1.20.4', mcVersion: '1.20.4', loaderType: 'fabric', loaderVersion: '', ram: 4, created: Date.now() },
       ];
-      fs.writeFileSync(this.profilesFile, JSON.stringify(defaultProfiles, null, 2));
+      writeProfilesAtomic(this.profilesFile, defaultProfiles);
     }
   }
 
@@ -44,7 +57,7 @@ class ProfileService {
       if (index !== -1) profiles[index] = { ...profiles[index], ...profile };
       else profiles.push(profile);
     }
-    fs.writeFileSync(this.profilesFile, JSON.stringify(profiles, null, 2));
+    writeProfilesAtomic(this.profilesFile, profiles);
     this.getModsFolder(profile.id);
     return profile;
   }
@@ -74,7 +87,7 @@ class ProfileService {
     }
 
     profiles = profiles.filter((p) => p.id !== profileId);
-    fs.writeFileSync(this.profilesFile, JSON.stringify(profiles, null, 2));
+    writeProfilesAtomic(this.profilesFile, profiles);
 
     const profileDir = path.join(this.baseDir, 'profiles', profileId);
     if (fs.existsSync(profileDir)) {

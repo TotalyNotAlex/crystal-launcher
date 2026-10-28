@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.exe
 .crystall/
+.dev-userdata/
 
 overlay-mod/.gradle/
 overlay-mod/build/

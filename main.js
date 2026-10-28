@@ -15,6 +15,15 @@ process.on('unhandledRejection', (reason) => {
   console.error('Unhandled Rejection:', reason);
 });
 
+// Development runs must never share a profile with the installed launcher:
+// both would use %APPDATA%\crystal-launcher and fight over the same files
+// (and the single-instance lock). Keep dev state inside the project instead.
+// This has to run before any service module is required, because services read
+// app.getPath('userData') while they are being constructed.
+if (!app.isPackaged) {
+  app.setPath('userData', path.join(__dirname, '.dev-userdata'));
+}
+
 const authService = require('./services/authService');
 const versionService = require('./services/versionService');
 const profileService = require('./services/profileService');
@@ -31,6 +40,7 @@ let bgUpdatePath = null;
 
 let mainWindow = null;
 const isUpdateRestart = process.argv.includes('--updated');
+
 const baseDataDir = path.join(app.getPath('userData'), '.crystall');
 const windowStateFile = path.join(baseDataDir, 'window-state.json');
 const accountsFile = path.join(baseDataDir, 'accounts.json');
@@ -40,13 +50,28 @@ const playtimeFile = path.join(baseDataDir, 'playtime.json');
 const javaService = new JavaService(baseDataDir);
 updateService.setManifestPath(path.join(baseDataDir, 'latest-version.json'));
 
+// Write JSON through a temp file + rename, so a crash or a forced quit can
+// never leave a half-written accounts.json / profiles.json / settings.json.
+function writeJsonAtomic(file, value) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf8');
+    fs.renameSync(tmp, file);
+    return true;
+  } catch (err) {
+    console.warn(`Failed to write ${path.basename(file)}:`, err.message);
+    try { fs.unlinkSync(tmp); } catch {}
+    return false;
+  }
+}
+
 function ensureDataDir() {
   if (!fs.existsSync(baseDataDir)) fs.mkdirSync(baseDataDir, { recursive: true });
-  if (!fs.existsSync(accountsFile)) fs.writeFileSync(accountsFile, JSON.stringify([], null, 2));
+  if (!fs.existsSync(accountsFile)) writeJsonAtomic(accountsFile, []);
   if (!fs.existsSync(settingsFile)) {
-    fs.writeFileSync(settingsFile, JSON.stringify({
+    writeJsonAtomic(settingsFile, {
       activeAccountId: null, activeProfileId: null, lastLoader: 'vanilla', lastVersion: '1.20.4', defaultRam: 4, jvmArgs: '', keepLauncherOpen: true, language: 'en', discordRpc: true, javaPath: '',
-    }, null, 2));
+    });
   }
 }
 
@@ -59,7 +84,7 @@ function getSavedSettings() {
 function saveSettingsToStore(newSettings) {
   ensureDataDir();
   const updated = { ...getSavedSettings(), ...newSettings };
-  fs.writeFileSync(settingsFile, JSON.stringify(updated, null, 2));
+  writeJsonAtomic(settingsFile, updated);
   return updated;
 }
 
@@ -74,14 +99,14 @@ function saveAccountToStore(account) {
   const index = accounts.findIndex((a) => a.id === account.id);
   if (index !== -1) accounts[index] = account;
   else accounts.push(account);
-  fs.writeFileSync(accountsFile, JSON.stringify(accounts, null, 2));
+  writeJsonAtomic(accountsFile, accounts);
   return accounts;
 }
 
 function removeAccountFromStore(accountId) {
   ensureDataDir();
   const accounts = getSavedAccounts().filter((a) => a.id !== accountId);
-  fs.writeFileSync(accountsFile, JSON.stringify(accounts, null, 2));
+  writeJsonAtomic(accountsFile, accounts);
   return accounts;
 }
 
@@ -148,7 +173,7 @@ function saveWindowState() {
     const bounds = mainWindow.getBounds();
     if (!isBoundsVisibleOnSomeDisplay(bounds)) return;
     const maximized = mainWindow.isMaximized();
-    fs.writeFileSync(windowStateFile, JSON.stringify({ bounds, maximized }, null, 2));
+    writeJsonAtomic(windowStateFile, { bounds, maximized });
   } catch {}
 }
 
@@ -429,7 +454,7 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId, server }) => {
     if (result?.status === 'started') {
       const sessions = getPlaytimeSessions();
       sessions.push({ id: Date.now().toString(), start: sessionStart, profile: profile.name, version: profile.mcVersion });
-      fs.writeFileSync(playtimeFile, JSON.stringify(sessions, null, 2));
+      writeJsonAtomic(playtimeFile, sessions);
       if (settings.discordRpc !== false) {
         rpcService.connect();
         rpcService.setActivity({
@@ -782,7 +807,7 @@ const defaultServers = [
 ipcMain.handle('get-servers', async () => {
   if (!fs.existsSync(serversFile)) {
     try {
-      fs.writeFileSync(serversFile, JSON.stringify(defaultServers, null, 2));
+      writeJsonAtomic(serversFile, defaultServers);
       return defaultServers;
     } catch { return []; }
   }
@@ -795,14 +820,14 @@ ipcMain.handle('save-server', async (e, server) => {
   const idx = list.findIndex((s) => s.id === server.id);
   if (idx !== -1) list[idx] = server;
   else list.push(server);
-  fs.writeFileSync(serversFile, JSON.stringify(list, null, 2));
+  writeJsonAtomic(serversFile, list);
   return list;
 });
 
 ipcMain.handle('delete-server', async (e, id) => {
   const list = fs.existsSync(serversFile) ? JSON.parse(fs.readFileSync(serversFile, 'utf8')) : [];
   const filtered = list.filter((s) => s.id !== id);
-  fs.writeFileSync(serversFile, JSON.stringify(filtered, null, 2));
+  writeJsonAtomic(serversFile, filtered);
   return filtered;
 });
 
