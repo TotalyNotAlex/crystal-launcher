@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, Tray, Menu, nativeImage, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, Tray, Menu, nativeImage, protocol, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
@@ -120,10 +120,33 @@ function checkJava() {
   return { found: false, version: null, full: null, path: null, major: 0, needsInstall: true };
 }
 
-function saveWindowState() {
-  if (!mainWindow) return;
+// A saved window position is only usable if a meaningful part of the window
+// actually lands on one of the connected displays. Minimized windows report
+// their bounds as -32000/-32000 on Windows, and storing that makes the next
+// start invisible with no way back except the tray.
+function isBoundsVisibleOnSomeDisplay(bounds) {
+  if (!bounds || typeof bounds.x !== 'number' || typeof bounds.y !== 'number') return false;
+  if (!(bounds.width >= 400) || !(bounds.height >= 300)) return false;
+  if (bounds.x <= -10000 || bounds.y <= -10000) return false;
   try {
+    return screen.getAllDisplays().some((display) => {
+      const area = display.workArea;
+      const overlapX = Math.min(bounds.x + bounds.width, area.x + area.width) - Math.max(bounds.x, area.x);
+      const overlapY = Math.min(bounds.y + bounds.height, area.y + area.height) - Math.max(bounds.y, area.y);
+      return overlapX >= 100 && overlapY >= 100;
+    });
+  } catch {
+    return false;
+  }
+}
+
+function saveWindowState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    // Never persist the placeholder bounds of a minimized/fullscreen window.
+    if (mainWindow.isMinimized() || mainWindow.isFullScreen()) return;
     const bounds = mainWindow.getBounds();
+    if (!isBoundsVisibleOnSomeDisplay(bounds)) return;
     const maximized = mainWindow.isMaximized();
     fs.writeFileSync(windowStateFile, JSON.stringify({ bounds, maximized }, null, 2));
   } catch {}
@@ -135,7 +158,7 @@ function createWindow() {
   try {
     if (fs.existsSync(windowStateFile)) {
       const saved = JSON.parse(fs.readFileSync(windowStateFile, 'utf8'));
-      if (saved.bounds) bounds = saved.bounds;
+      if (saved.bounds && isBoundsVisibleOnSomeDisplay(saved.bounds)) bounds = saved.bounds;
       if (saved.maximized) maximized = true;
     }
   } catch {}
@@ -158,11 +181,25 @@ function createWindow() {
 
   if (maximized) mainWindow.maximize();
   mainWindow.loadFile('index.html');
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    // Safety net: if the restored position is (still) off-screen, recenter
+    // before showing so the launcher can never start invisibly.
+    if (!isBoundsVisibleOnSomeDisplay(mainWindow.getBounds())) mainWindow.center();
+    mainWindow.show();
+  });
   mainWindow.on('resize', saveWindowState);
   mainWindow.on('move', saveWindowState);
   mainWindow.on('maximize', saveWindowState);
   mainWindow.on('unmaximize', saveWindowState);
+}
+
+// Bring the window back into view no matter where it currently is.
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!isBoundsVisibleOnSomeDisplay(mainWindow.getBounds())) mainWindow.center();
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 app.whenReady().then(() => {
@@ -174,11 +211,7 @@ app.whenReady().then(() => {
   app.on('second-instance', (event, argv) => {
     const urlArg = argv.find((a) => a.startsWith('crystall://'));
     if (urlArg) handleDeepLink(urlArg);
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    showMainWindow();
   });
 
   try {
@@ -422,7 +455,7 @@ function getPlaytimeSessions() {
 }
 
 ipcMain.handle('check-updates', async () => updateService.checkForUpdates());
-ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return '1.4.17'; } });
+ipcMain.handle('get-app-version', async () => { try { return app.getVersion(); } catch { return require('./package.json').version; } });
 
 ipcMain.handle('get-saved-skins', async () => {
   const skinDir = path.join(baseDataDir, 'skins');
@@ -1312,14 +1345,14 @@ function createTray() {
     tray = new Tray(nativeImage.createFromPath(iconPath));
     tray.setToolTip('Crystal Launcher');
     const menu = Menu.buildFromTemplate([
-      { label: 'Show Crystal Launcher', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
+      { label: 'Show Crystal Launcher', click: () => showMainWindow() },
       { type: 'separator' },
       { label: 'Quit', click: () => app.quit() },
     ]);
     tray.setContextMenu(menu);
     tray.on('click', () => {
       if (!mainWindow) return;
-      if (mainWindow.isVisible()) { mainWindow.hide(); } else { mainWindow.show(); mainWindow.focus(); }
+      if (mainWindow.isVisible()) { mainWindow.hide(); } else { showMainWindow(); }
     });
   } catch (err) { console.warn('Tray error:', err.message); }
 }

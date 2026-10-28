@@ -24,6 +24,7 @@
   "play.error": "Startfehler",
   "play.java_not_found": "Java 21 nicht gefunden. Wird vor dem Start automatisch heruntergeladen",
   "play.prepare": "Vorbereiten...",
+  "play.search_version": "Version suchen...",
 
   "mods.browse": "Durchsuchen",
   "mods.modpacks": "Modpakete",

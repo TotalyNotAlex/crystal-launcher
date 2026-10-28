@@ -114,18 +114,30 @@ class LaunchService {
 
   async getLatestQuiltLoaderForMc(mcVersion) {
     try {
-      const res = await axios.get(`https://meta.quiltmc.org/v2/versions/loader/${mcVersion}`, { timeout: 5000 });
+      // Quilt retired the v2 meta endpoints; v3 answers with
+      // [{ loader: { version }, ... }] per Minecraft version.
+      const res = await axios.get(`https://meta.quiltmc.org/v3/versions/loader/${mcVersion}`, { timeout: 8000 });
       const list = Array.isArray(res.data) ? res.data : [];
-      const stable = list.find((l) => (typeof l === 'object' ? l.version && l.stable !== false : true));
-      if (stable && typeof stable === 'object' && stable.version) return stable.version;
-      if (typeof stable === 'string') return stable;
-      if (list.length) return typeof list[0] === 'object' ? list[0].version : list[0];
-      return '0.28.0';
-    } catch { return '0.28.0'; }
+      const versions = list
+        .map((entry) => (entry && typeof entry === 'object'
+          ? (entry.loader && entry.loader.version) || entry.version
+          : entry))
+        .filter((v) => typeof v === 'string' && v);
+      // Prefer a release build; fall back to whatever is newest.
+      const stable = versions.find((v) => !/beta|alpha|pre|rc/i.test(v));
+      return stable || versions[0] || null;
+    } catch (err) {
+      console.warn('Quilt loader lookup failed:', err.message);
+      return null;
+    }
   }
 
-  async ensureQuiltVersion(mcVersion, loaderVersion) {
+  async ensureQuiltVersion(mcVersion, loaderVersion, allowLoaderRetry = true) {
     if (!loaderVersion) loaderVersion = await this.getLatestQuiltLoaderForMc(mcVersion);
+    if (!loaderVersion) {
+      console.warn(`No Quilt loader available for Minecraft ${mcVersion}.`);
+      return null;
+    }
     const customVersionName = `quilt-loader-${loaderVersion}-${mcVersion}`;
     const versionDir = path.join(this.gameDir, 'versions', customVersionName);
     const versionJsonPath = path.join(versionDir, `${customVersionName}.json`);
@@ -134,7 +146,7 @@ class LaunchService {
       fs.mkdirSync(versionDir, { recursive: true });
       try {
         const res = await axios.get(
-          `https://meta.quiltmc.org/v2/versions/loader/${mcVersion}/${loaderVersion}/profile/json`,
+          `https://meta.quiltmc.org/v3/versions/loader/${mcVersion}/${loaderVersion}/profile/json`,
           { timeout: 15000 }
         );
         fs.writeFileSync(versionJsonPath, JSON.stringify(res.data, null, 2));
@@ -142,6 +154,14 @@ class LaunchService {
       } catch (err) {
         console.warn('Quilt profile fetch warning:', err.message);
         try { fs.rmSync(versionDir, { recursive: true, force: true }); } catch {}
+        // A loader version pinned in an old profile may no longer exist for
+        // this Minecraft version - retry once with the newest one.
+        if (allowLoaderRetry) {
+          const fallback = await this.getLatestQuiltLoaderForMc(mcVersion);
+          if (fallback && fallback !== loaderVersion) {
+            return this.ensureQuiltVersion(mcVersion, fallback, false);
+          }
+        }
         return null;
       }
     }

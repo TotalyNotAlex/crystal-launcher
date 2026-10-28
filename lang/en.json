@@ -24,6 +24,7 @@
   "play.error": "Launch Error",
   "play.java_not_found": "Java 21 not found. It will be downloaded automatically before launch",
   "play.prepare": "Preparing...",
+  "play.search_version": "Search version...",
 
   "mods.browse": "Browse",
   "mods.curseforge": "CurseForge",

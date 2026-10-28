@@ -126,8 +126,8 @@ class VersionService {
     if (this.cache.quilt) return this.cache.quilt;
     try {
       const [gameRes, loaderRes] = await Promise.all([
-        axios.get('https://meta.quiltmc.org/v2/versions/game', { timeout: 10000 }),
-        axios.get('https://meta.quiltmc.org/v2/versions/loader', { timeout: 10000 }),
+        axios.get('https://meta.quiltmc.org/v3/versions/game', { timeout: 10000 }),
+        axios.get('https://meta.quiltmc.org/v3/versions/loader', { timeout: 10000 }),
       ]);
       const validMcRegex = /^1\.\d+(\.\d+)?$/;
       const mcVersions = (Array.isArray(gameRes.data) ? gameRes.data : [])
@@ -136,7 +136,10 @@ class VersionService {
       const loaders = (Array.isArray(loaderRes.data) ? loaderRes.data : [])
         .map((l) => (typeof l === 'string' ? l : l.version))
         .filter(Boolean);
-      const result = { mcVersions, loaders, latestLoader: loaders[0] || '0.28.0' };
+      // Prefer a release build for the default selection; only fall back to a
+      // pre-release when Quilt has no stable loader at all.
+      const latestLoader = loaders.find((v) => !/beta|alpha|pre|rc/i.test(v)) || loaders[0] || '0.28.0';
+      const result = { mcVersions, loaders, latestLoader };
       this.cache.quilt = result;
       return result;
     } catch (err) {

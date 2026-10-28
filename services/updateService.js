@@ -3,7 +3,9 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const CURRENT_VERSION = '1.4.17';
+// Always take the version from package.json - a hardcoded copy drifted before
+// and caused an update loop when it fell behind the released build.
+const CURRENT_VERSION = require('../package.json').version;
 let manifestPath = '';
 
 class UpdateService {
