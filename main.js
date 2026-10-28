@@ -416,8 +416,25 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId, server }) => {
     const profile = profiles.find((p) => p.id === profileId) || profiles[0];
     if (!profile) return { success: false, error: 'No profile found. Create a profile first.' };
     const accounts = getSavedAccounts();
-    const account = accounts.find((a) => a.id === accountId) || accounts[0];
+    let account = accounts.find((a) => a.id === accountId) || accounts[0];
     if (!account) return { success: false, error: 'No account selected. Add an account first.' };
+    // Minecraft tokens expire after ~24h. Renew them before launching, otherwise
+    // the launch dies with a 401 that looks like being randomly logged out.
+    if (account.type === 'microsoft') {
+      try {
+        const fresh = await authService.ensureFreshAccount(account);
+        if (fresh && fresh.accessToken && fresh.accessToken !== account.accessToken) {
+          account = { ...account, ...fresh };
+          saveAccountToStore(account);
+          e.sender.send('launch-status', 'Session renewed');
+        }
+      } catch (authErr) {
+        if (authErr.code === 'AUTH_EXPIRED') {
+          return { success: false, error: authErr.message, needsLogin: true };
+        }
+        throw authErr;
+      }
+    }
     if (settings.defaultRam && (!profile.ram || profile.ram === 4)) profile.ram = settings.defaultRam;
     if (settings.autoBackup) {
       try { runScheduledWorldBackups(); } catch {}

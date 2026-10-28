@@ -4,6 +4,26 @@ const { BrowserWindow } = require('electron');
 const CLIENT_ID = '00000000402b5328';
 const REDIRECT_URI = 'https://login.live.com/oauth20_desktop.srf';
 
+// Decode a JWT payload without verifying it - we only need the exp claim of a
+// token we got from Microsoft ourselves.
+function decodeJwtPayload(token) {
+  try {
+    const part = String(token || '').split('.')[1];
+    if (!part) return null;
+    const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
+
+// Seconds until the token expires, or null when we cannot tell.
+function tokenSecondsLeft(accessToken) {
+  const payload = decodeJwtPayload(accessToken);
+  if (!payload || typeof payload.exp !== 'number') return null;
+  return Math.round(payload.exp - Date.now() / 1000);
+}
+
 class AuthService {
   async loginWithMicrosoft(onStatusUpdate) {
     return new Promise((resolve, reject) => {
@@ -209,6 +229,32 @@ class AuthService {
       console.warn('Token refresh failed:', err.message);
       return null;
     }
+  }
+
+  // The Minecraft access token is a JWT with an `exp` claim (~24h). Reading it
+  // lets us refresh before a launch instead of failing with a 401 that looks
+  // to the player like "I got logged out for no reason".
+  tokenSecondsLeft(accessToken) {
+    return tokenSecondsLeft(accessToken);
+  }
+
+  async ensureFreshAccount(account, marginSeconds = 300) {
+    if (!account || account.type !== 'microsoft' || !account.accessToken) return account;
+    const left = tokenSecondsLeft(account.accessToken);
+    // Opaque token we cannot read: let the launch try, the 401 retry covers it.
+    if (left === null || left > marginSeconds) return account;
+    if (!account.refreshToken) {
+      const err = new Error('Minecraft session expired. Please sign in again.');
+      err.code = 'AUTH_EXPIRED';
+      throw err;
+    }
+    const refreshed = await this.refreshMicrosoftToken(account.refreshToken);
+    if (!refreshed || !refreshed.accessToken) {
+      const err = new Error('Minecraft session expired and could not be renewed. Please sign in again.');
+      err.code = 'AUTH_EXPIRED';
+      throw err;
+    }
+    return { ...account, ...refreshed };
   }
 
   createOfflineAccount(username) {

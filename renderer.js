@@ -1351,9 +1351,15 @@ $('btn-play').onclick = async function () {
     let msg = result.error || t('toast.error');
     if (msg.includes('Java not found') || msg.includes('Java 21')) msg += ' — will retry download in Settings > Java Runtime';
     toast(t('play.error'), msg, 'error');
-    pcText.textContent = 'Launch failed';
+    pcText.textContent = result.needsLogin ? 'Sign in again' : 'Launch failed';
     this.disabled = false; this.textContent = t('play.btn');
     setTimeout(() => pc.classList.remove('active'), 1000);
+    if (result.needsLogin) {
+      // An expired session is not a crash - send the player to the account list
+      // instead of opening a (stale) crash log.
+      document.querySelector('.nav-item[data-view="accounts"]')?.click();
+      return;
+    }
     window.api.getCrashLogs().then((logs) => {
       if (logs.length) {
         const latest = logs[0];
