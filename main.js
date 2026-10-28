@@ -112,10 +112,13 @@ function removeAccountFromStore(accountId) {
   return accounts;
 }
 
-function checkJava() {
+function checkJava(mcVersion) {
   const settings = getSavedSettings();
+  // What the game was built against matters more than the newest runtime:
+  // NeoForge/Forge crash on a much newer Java than their target.
+  const target = launchService.requiredJavaMajor(mcVersion || '1.21.1');
   try {
-    const best = javaService.findJava({ settingsPath: settings.javaPath, minMajor: 21 });
+    const best = javaService.findJava({ settingsPath: settings.javaPath, minMajor: target, preferredMajor: target });
     if (best) {
       return {
         found: true,
@@ -124,6 +127,7 @@ function checkJava() {
         full: best.full,
         path: best.path,
         is64: best.is64,
+        required: target,
       };
     }
   } catch {}
@@ -139,12 +143,13 @@ function checkJava() {
         path: any.path,
         is64: any.is64,
         needsInstall: true,
-        reason: any.major < 21 ? `Java ${any.major} is too old (21+ required)` : 'Java is not 64-bit',
+        required: target,
+        reason: any.major < target ? `Java ${any.major} is too old (Java ${target} required)` : `Java ${any.major} found, but this version needs Java ${target}`,
       };
     }
   } catch {}
 
-  return { found: false, version: null, full: null, path: null, major: 0, needsInstall: true };
+  return { found: false, version: null, full: null, path: null, major: 0, needsInstall: true, required: target };
 }
 
 // A saved window position is only usable if a meaningful part of the window
@@ -304,7 +309,7 @@ ipcMain.on('window-maximize', () => { if (mainWindow) mainWindow.isMaximized() ?
 ipcMain.on('window-close', () => { app.quit(); });
 ipcMain.on('window-expand', () => mainWindow?.setMinimumSize(850, 580));
 
-ipcMain.handle('check-java', async () => checkJava());
+ipcMain.handle('check-java', async (e, mcVersion) => checkJava(mcVersion));
 
 ipcMain.handle('browse-java', async () => {
   const { dialog } = require('electron');
@@ -323,7 +328,7 @@ ipcMain.handle('install-java', async (e) => {
   try {
     const result = await javaService.downloadAndInstall((progress) => {
       e.sender.send('java-install-progress', progress);
-    });
+    }, 21);
     return { success: true, path: result };
   } catch (err) {
     return { success: false, error: err.message };
@@ -588,7 +593,7 @@ ipcMain.handle('preflight-check', async (e, { profileId }) => {
     const profile = profiles.find((p) => p.id === profileId) || profiles[0];
     if (!profile) return { success: false, error: 'No profile found' };
     const settings = getSavedSettings();
-    const java = checkJava();
+    const java = checkJava(profile.mcVersion);
     const totalRamGB = Math.round((os.totalmem() / 1024 ** 3) * 10) / 10;
     const ram = Number(profile.ram || settings.defaultRam || 4);
     let mods = { enabled: 0, disabled: 0 };

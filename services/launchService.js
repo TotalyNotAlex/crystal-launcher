@@ -57,15 +57,28 @@ class LaunchService {
     return {};
   }
 
-  async ensureJava(onStatus, onProgress) {
+  // Minecraft's version JSON pins the Java major the game was built for.
+  requiredJavaMajor(mcVersion) {
+    try {
+      const file = path.join(this.gameDir, 'versions', mcVersion, `${mcVersion}.json`);
+      const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const major = json.javaVersion && json.javaVersion.majorVersion;
+      if (Number.isFinite(major) && major >= 8) return Math.max(21, major);
+    } catch {}
+    return 21;
+  }
+
+  async ensureJava(onStatus, onProgress, mcVersion) {
     const javaSvc = new JavaService(this.dataDir);
     const settings = this.readSettings();
+    const target = this.requiredJavaMajor(mcVersion);
 
-    if (onStatus) onStatus('Checking Java 21+ runtime...');
+    if (onStatus) onStatus(`Checking Java ${target} runtime...`);
     try {
       const info = await javaSvc.ensureJava({
         settingsPath: settings.javaPath,
-        minMajor: 21,
+        minMajor: target,
+        preferredMajor: target,
         onProgress: (p) => {
           if (onStatus) onStatus(p.status || 'Installing Java...');
           if (onProgress && typeof p.percent === 'number') {
@@ -77,7 +90,7 @@ class LaunchService {
       return info.path;
     } catch (err) {
       throw new Error(
-        `Java 21+ is required but could not be installed: ${err.message}. ` +
+        `Java ${target} is required but could not be installed: ${err.message}. ` +
         'Download Temurin 21 manually from https://adoptium.net or use Retry in Settings > Java Runtime.'
       );
     }
@@ -167,6 +180,30 @@ class LaunchService {
       }
     }
     return { name: customVersionName, json: versionJsonPath };
+  }
+
+  // Loader versions carry their own JVM flags (NeoForge/Forge need --add-opens
+  // for the bootstrap module layer). minecraft-launcher-core ignores the
+  // arguments.jvm block of a custom version, so we pass them ourselves.
+  getVersionJvmArgs(gameRoot, versionName) {
+    try {
+      const file = path.join(gameRoot, 'versions', versionName, `${versionName}.json`);
+      const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const args = (json.arguments && Array.isArray(json.arguments.jvm)) ? json.arguments.jvm : [];
+      const libraryDirectory = path.join(gameRoot, 'libraries');
+      const launcherVersion = (app && app.getVersion) ? app.getVersion() : '1.0.0';
+      return args
+        .map((arg) => String(arg)
+          .replace(/\$\{library_directory\}/g, libraryDirectory)
+          .replace(/\$\{classpath_separator\}/g, path.delimiter)
+          .replace(/\$\{version_name\}/g, versionName)
+          .replace(/\$\{launcher_name\}/g, 'Crystal Launcher')
+          .replace(/\$\{launcher_version\}/g, launcherVersion)
+          .replace(/\$\{classpath\}/g, ''))
+        .filter((arg) => arg && !/\$\{[^}]+\}/.test(arg));
+    } catch {
+      return [];
+    }
   }
 
   getGameRoot(profile) {
@@ -342,7 +379,7 @@ class LaunchService {
       try {
         let javaPath;
         try {
-          javaPath = await this.ensureJava(onStatus, onProgress);
+          javaPath = await this.ensureJava(onStatus, onProgress, profile.mcVersion);
         } catch (err) {
           reject(err);
           return;
@@ -447,6 +484,14 @@ class LaunchService {
             if (neoforge.json) opts.version.custom = neoforge.name;
             if (neoforge.installer) opts.forge = neoforge.installer;
           }
+        }
+
+        // NeoForge/Forge cannot start without the JVM flags from their version
+        // JSON (--add-opens java.base/java.lang.invoke=...), which mclc drops.
+        // Fabric/Quilt work without them, so only do this where it is needed.
+        if (opts.version.custom && (loaderType === 'neoforge' || loaderType === 'forge')) {
+          const loaderJvmArgs = this.getVersionJvmArgs(gameRoot, opts.version.custom);
+          if (loaderJvmArgs.length) opts.customArgs.push(...loaderJvmArgs);
         }
 
         if (onStatus) onStatus(`Starting Minecraft ${mcVersion}...`);

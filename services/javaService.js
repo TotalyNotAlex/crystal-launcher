@@ -167,7 +167,7 @@ class JavaService {
     return [...new Set(candidates.filter(Boolean))];
   }
 
-  findJava({ settingsPath, minMajor = MIN_MAJOR } = {}) {
+  findJava({ settingsPath, minMajor = MIN_MAJOR, preferredMajor = null } = {}) {
     const order = [];
     if (settingsPath) order.push(settingsPath);
     const bundled = this.getInstalledPath();
@@ -175,14 +175,33 @@ class JavaService {
     order.push(...this.collectSystemCandidates());
 
     const seen = new Set();
+    const usable = [];
     for (const candidate of order) {
       const key = path.resolve(candidate);
       if (seen.has(key)) continue;
       seen.add(key);
       const info = this.inspectJava(candidate);
-      if (info && info.major >= minMajor && info.is64) return info;
+      if (info && info.major >= minMajor && info.is64) usable.push(info);
     }
-    return null;
+    if (!usable.length) return null;
+
+    if (preferredMajor) {
+      // Minecraft and the mod loaders are built against one specific major.
+      // Running NeoForge/Forge on a newer one breaks their module layer, so use
+      // the exact version - or return null and let ensureJava install it.
+      const exact = usable.find((info) => info.major === preferredMajor);
+      if (exact) return exact;
+      const skipped = usable.filter((info) => info.major !== preferredMajor);
+      if (skipped.length) {
+        console.warn(`Java ${preferredMajor} required, but only ${skipped.map((i) => i.major).join(', ')} found - installing the right one.`);
+      }
+      return null;
+    }
+
+    // Without a pinned major, take the closest runtime above the minimum
+    // instead of the newest one, where compatibility problems start.
+    usable.sort((a, b) => a.major - b.major);
+    return usable[0];
   }
 
   findAnyJava() {
@@ -228,15 +247,16 @@ class JavaService {
     throw new Error(`No Temurin ${feature} ${imageType} build found for ${q.osName}/${q.arch}`);
   }
 
-  async ensureJava({ settingsPath, onProgress, minMajor = MIN_MAJOR } = {}) {
-    const existing = this.findJava({ settingsPath, minMajor });
+  async ensureJava({ settingsPath, onProgress, minMajor = MIN_MAJOR, preferredMajor = null } = {}) {
+    const existing = this.findJava({ settingsPath, minMajor, preferredMajor });
     if (existing) return existing;
 
-    onProgress?.({ percent: 0, status: `Java ${minMajor}+ not found. Starting download...` });
-    const installedPath = await this.downloadAndInstall(onProgress, minMajor);
+    const target = preferredMajor || minMajor;
+    onProgress?.({ percent: 0, status: `Java ${target} not found. Starting download...` });
+    const installedPath = await this.downloadAndInstall(onProgress, target);
     const info = this.inspectJava(installedPath);
     if (!info) throw new Error('Downloaded Java could not be started (corrupt install?)');
-    if (info.major < minMajor) throw new Error(`Installed Java ${info.major} is older than required Java ${minMajor}`);
+    if (info.major < target) throw new Error(`Installed Java ${info.major} is older than required Java ${target}`);
     if (!info.is64) throw new Error('Downloaded Java is 32-bit; a 64-bit runtime is required');
     onProgress?.({ percent: 100, status: `Java ${info.major} ready` });
     return info;
