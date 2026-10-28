@@ -252,6 +252,7 @@ app.whenReady().then(() => {
   const coldLink = process.argv.find((a) => a.startsWith('crystall://'));
   if (coldLink) setTimeout(() => handleDeepLink(coldLink), 1500);
 
+  normalizePlaytimeOnStartup();
   createWindow();
   createTray();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
@@ -290,6 +291,7 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => {
+  stopPlaytimeTracking(true);
   if (mainWindow) mainWindow.destroy();
 });
 
@@ -461,6 +463,7 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId, server }) => {
         }
       },
       () => {
+        stopPlaytimeTracking(true);
         rpcService.clearActivity();
         rpcService.disconnect();
         const settings2 = getSavedSettings();
@@ -472,8 +475,10 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId, server }) => {
     );
     if (result?.status === 'started') {
       const sessions = getPlaytimeSessions();
-      sessions.push({ id: Date.now().toString(), start: sessionStart, profile: profile.name, version: profile.mcVersion });
+      const sessionId = Date.now().toString();
+      sessions.push({ id: sessionId, start: sessionStart, profile: profile.name, version: profile.mcVersion });
       writeJsonAtomic(playtimeFile, sessions);
+      startPlaytimeTracking(sessionId);
       if (settings.discordRpc !== false) {
         rpcService.connect();
         rpcService.setActivity({
@@ -497,6 +502,60 @@ function getPlaytimeSessions() {
   try { return JSON.parse(fs.readFileSync(playtimeFile, 'utf8')); }
   catch { return []; }
 }
+
+// --- Playtime tracking ----------------------------------------------------
+// A session used to be written with only a start time and never closed, so the
+// UI counted every session from its start until "now" forever.
+const MAX_SESSION_ESTIMATE_MS = 4 * 60 * 60 * 1000;
+let activePlaytimeSessionId = null;
+let playtimeTicker = null;
+
+function finishPlaytimeSession(id, endTime = Date.now()) {
+  if (!id) return;
+  const sessions = getPlaytimeSessions();
+  const session = sessions.find((s) => s.id === id);
+  if (!session) return;
+  session.end = Math.max(Number(session.start) || endTime, endTime);
+  delete session.estimated;
+  writeJsonAtomic(playtimeFile, sessions);
+}
+
+function startPlaytimeTracking(id) {
+  stopPlaytimeTracking();
+  activePlaytimeSessionId = id;
+  // Keep the running session's end fresh so a crash loses at most a minute.
+  playtimeTicker = setInterval(() => finishPlaytimeSession(id), 60000);
+}
+
+function stopPlaytimeTracking(finalize = true) {
+  if (playtimeTicker) { clearInterval(playtimeTicker); playtimeTicker = null; }
+  if (finalize && activePlaytimeSessionId) finishPlaytimeSession(activePlaytimeSessionId);
+  activePlaytimeSessionId = null;
+}
+
+// Sessions left open by a crash or a hard kill get a bounded estimate instead of
+// growing without limit: at most 4h, and never past the next session's start.
+function normalizePlaytimeOnStartup() {
+  const sessions = getPlaytimeSessions();
+  if (!sessions.length) return;
+  let changed = false;
+  for (let i = 0; i < sessions.length; i += 1) {
+    const session = sessions[i];
+    if (!Number.isFinite(Number(session.start))) {
+      session.start = Date.now();
+      changed = true;
+    }
+    if (!Number(session.end)) {
+      const next = sessions[i + 1];
+      const nextStart = next && Number.isFinite(Number(next.start)) ? Number(next.start) : Date.now();
+      session.end = Math.max(Number(session.start), Math.min(nextStart, Number(session.start) + MAX_SESSION_ESTIMATE_MS));
+      session.estimated = true;
+      changed = true;
+    }
+  }
+  if (changed) writeJsonAtomic(playtimeFile, sessions);
+}
+
 
 // --- Crash recovery -------------------------------------------------------
 // Disabling the newest mod (or all of them) is the fix that actually gets a
@@ -836,11 +895,24 @@ ipcMain.handle('download-mc-version', async (e, { version, loaderType }) => {
 
 ipcMain.handle('get-playtime', async () => {
   const sessions = getPlaytimeSessions();
-  const totalMs = sessions.reduce((sum, s) => sum + (s.end || Date.now() - s.start), 0);
+  // `end` is an absolute timestamp, not a duration - mixing the two is what used
+  // to produce totals in the tens of thousands of hours.
+  const durationOf = (s) => {
+    const start = Number(s.start);
+    const end = Number(s.end);
+    if (!Number.isFinite(start)) return 0;
+    if (!Number.isFinite(end)) return 0;
+    return Math.max(0, end - start);
+  };
+  const totalMs = sessions.reduce((sum, s) => sum + durationOf(s), 0);
   const today = new Date().toDateString();
-  const todayMs = sessions.filter((s) => new Date(s.start).toDateString() === today).reduce((sum, s) => sum + (s.end || Date.now() - s.start), 0);
+  const todayMs = sessions
+    .filter((s) => new Date(s.start).toDateString() === today)
+    .reduce((sum, s) => sum + durationOf(s), 0);
   const weekStart = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const weekMs = sessions.filter((s) => s.start >= weekStart).reduce((sum, s) => sum + (s.end || Date.now() - s.start), 0);
+  const weekMs = sessions
+    .filter((s) => Number(s.start) >= weekStart)
+    .reduce((sum, s) => sum + durationOf(s), 0);
   return { totalMs, todayMs, weekMs, sessions: sessions.slice(-50).reverse() };
 });
 

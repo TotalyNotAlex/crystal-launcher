@@ -100,25 +100,49 @@ class VersionService {
 
     async getNeoForgeVersions() {
     if (this.cache.neoforge) return this.cache.neoforge;
+    const mcVersions = ['1.21.11', '1.21.1', '1.21.0', '1.20.6', '1.20.4', '1.20.2', '1.20.1'];
+    // Offline fallback only - the real list is fetched from the NeoForge maven.
+    const fallbackMap = {
+      '1.21.11': '21.11.48',
+      '1.21.1': '21.1.265',
+      '1.21.0': '21.0.167',
+      '1.20.6': '20.6.119',
+      '1.20.4': '20.4.253',
+      '1.20.2': '20.2.86',
+      '1.20.1': '47.1.84'
+    };
+    const byVersion = (a, b) => {
+      const pa = String(a).split('.').map(Number);
+      const pb = String(b).split('.').map(Number);
+      for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+        const diff = (pa[i] || 0) - (pb[i] || 0);
+        if (diff) return diff;
+      }
+      return 0;
+    };
     try {
-      const mcVersions = ['1.21.11', '1.21.1', '1.21.0', '1.20.6', '1.20.4', '1.20.2', '1.20.1'];
-      const neoforgeMap = {
-        '1.21.11': '21.1.65',
-        '1.21.1': '21.1.64',
-        '1.21.0': '21.0.167',
-        '1.20.6': '20.6.119',
-        '1.20.4': '20.4.167',
-        '1.20.2': '20.2.86',
-        '1.20.1': '47.1.84'
-      };
+      const res = await axios.get(
+        'https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge',
+        { timeout: 15000 }
+      );
+      const all = (res.data && res.data.versions) || [];
+      const neoforgeMap = { ...fallbackMap };
+      for (const mc of mcVersions) {
+        // NeoForge numbers its builds after the Minecraft version: 1.21.1 ->
+        // 21.1.x. The 1.20.1 line still uses the legacy 47.1.x scheme.
+        if (mc === '1.20.1') continue;
+        const prefix = `${mc.replace(/^1\./, '')}.`;
+        const matches = all.filter((v) => typeof v === 'string' && v.startsWith(prefix));
+        if (matches.length) {
+          const sorted = matches.sort(byVersion);
+          neoforgeMap[mc] = sorted[sorted.length - 1];
+        }
+      }
       const result = { mcVersions, neoforgeMap };
       this.cache.neoforge = result;
       return result;
     } catch {
-      return {
-        mcVersions: ['1.21.1', '1.20.4', '1.20.1'],
-        neoforgeMap: { '1.21.1': '21.1.64', '1.20.4': '20.4.167', '1.20.1': '47.1.84' }
-      };
+      return { mcVersions, neoforgeMap: fallbackMap };
     }
   }
 
