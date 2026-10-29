@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Crystal Launcher – A beautiful, modern Minecraft launcher for Windows. Built-in mod manager, profile system, world backup and more.">
+  <meta property="og:title" content="Crystal Launcher">
+  <meta property="og:description" content="A beautiful, modern Minecraft launcher for Windows.">
+  <meta property="og:image" content="assets/screenshots/play.png">
+  <title>Crystal Launcher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #0b0c14;
+      --surface:   #111220;
+      --surface-2: #191a2a;
+      --surface-3: #22243a;
+      --border:    #272940;
+      --accent:    #5068f4;
+      --accent-2:  #7b8fff;
+      --accent-glow: rgba(80,104,244,.25);
+      --text:      #e4e6f4;
+      --muted:     #7880a0;
+      --dim:       #42465e;
+      --green:     #4db87a;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ──────────── NAV ──────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 clamp(1rem, 4vw, 2.5rem);
+      height: 60px;
+      background: rgba(11,12,20,.88);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      display: flex; align-items: center; gap: 9px;
+      font-weight: 700; font-size: 1rem;
+      text-decoration: none; color: var(--text);
+      letter-spacing: -.01em;
+    }
+
+    .nav-links {
+      display: flex; align-items: center; gap: 1.75rem; list-style: none;
+    }
+    .nav-links a {
+      color: var(--muted); text-decoration: none;
+      font-size: .875rem; font-weight: 500;
+      transition: color .2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-btn {
+      padding: 7px 16px;
+      background: var(--accent);
+      color: #fff !important;
+      border-radius: 8px;
+      font-weight: 600 !important;
+      font-size: .85rem !important;
+      transition: background .2s, transform .15s !important;
+    }
+    .nav-btn:hover { background: #3d52d8 !important; transform: translateY(-1px); }
+
+    /* ──────────── HERO ──────────── */
+    .hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: 120px clamp(1rem,4vw,2rem) 80px;
+      position: relative; overflow: hidden;
+    }
+
+    .hero-glow {
+      position: absolute; top: 30%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 900px; height: 500px;
+      background: radial-gradient(ellipse, rgba(80,104,244,.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-dots {
+      position: absolute; inset: 0; pointer-events: none;
+      background-image: radial-gradient(var(--border) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, black 0%, transparent 100%);
+      opacity: .4;
+    }
+
+    .hero-badge {
+      position: relative;
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 5px 13px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      font-size: .78rem; font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 1.5rem;
+    }
+    .hero-badge .dot {
+      width: 7px; height: 7px;
+      background: var(--green);
+      border-radius: 50%;
+      box-shadow: 0 0 6px var(--green);
+    }
+
+    .hero h1 {
+      position: relative;
+      font-size: clamp(2.4rem,6.5vw,4.8rem);
+      font-weight: 900;
+      line-height: 1.08;
+      letter-spacing: -.03em;
+      margin-bottom: 1.25rem;
+      max-width: 820px;
+    }
+
+    .hero h1 .grad {
+      background: linear-gradient(130deg, #94a8ff 0%, #5068f4 40%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero > p {
+      position: relative;
+      font-size: 1.1rem;
+      color: var(--muted);
+      max-width: 500px;
+      margin-bottom: 2.25rem;
+      font-weight: 400;
+    }
+
+    .hero-buttons {
+      position: relative;
+      display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+      margin-bottom: 1rem;
+    }
+
+    .hero-sub {
+      position: relative;
+      font-size: .78rem;
+      color: var(--dim);
+      margin-top: .25rem;
+    }
+
+    .hero-window {
+      position: relative;
+      margin-top: 4rem;
+      max-width: 900px; width: 100%;
+    }
+
+    .hero-window::before {
+      content: '';
+      position: absolute; inset: -1px;
+      border-radius: 13px;
+      background: linear-gradient(135deg, rgba(80,104,244,.35), rgba(167,139,250,.15) 50%, transparent);
+      z-index: -1;
+    }
+
+    .hero-window img {
+      width: 100%; display: block;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: 0 50px 120px rgba(0,0,0,.7), 0 0 80px rgba(80,104,244,.08);
+    }
+
+    .window-bar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-radius: 12px 12px 0 0;
+      border: 1px solid var(--border);
+      border-bottom: none;
+    }
+    .window-bar span {
+      width: 11px; height: 11px; border-radius: 50%;
+    }
+    .window-bar .red   { background: #ff5f57; }
+    .window-bar .yell  { background: #ffbd2e; }
+    .window-bar .gre   { background: #28c840; }
+
+    /* ──────────── SHARED ──────────── */
+    section { padding: 80px clamp(1rem,4vw,2rem); }
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    .section-label {
+      font-size: .72rem; font-weight: 700;
+      letter-spacing: .12em; text-transform: uppercase;
+      color: var(--accent-2);
+      margin-bottom: .65rem;
+    }
+
+    .section-title {
+      font-size: clamp(1.75rem,4vw,2.5rem);
+      font-weight: 800; letter-spacing: -.025em;
+      margin-bottom: .65rem;
+    }
+
+    .section-sub {
+      font-size: .95rem;
+      color: var(--muted);
+      max-width: 520px;
+      margin-bottom: 3rem;
+    }
+
+    /* ──────────── BUTTONS ──────────── */
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 10px;
+      font-size: .95rem; font-weight: 600;
+      cursor: pointer; text-decoration: none;
+      transition: background .2s, transform .15s, box-shadow .2s;
+      box-shadow: 0 0 35px var(--accent-glow);
+    }
+    .btn-primary:hover {
+      background: #3d52d8;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 35px var(--accent-glow);
+    }
+
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px;
+      background: var(--surface-2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 10px;
+      font-size: .95rem; font-weight: 600;
+      cursor: pointer; text-decoration: none;
+      transition: background .2s, transform .15s;
+    }
+    .btn-secondary:hover { background: var(--surface-3); transform: translateY(-2px); }
+
+    /* ──────────── FEATURES ──────────── */
+    #features { background: var(--surface); }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px,1fr));
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      gap: 1px;
+    }
+
+    .feature-card {
+      background: var(--surface);
+      padding: 2rem;
+      transition: background .2s;
+    }
+    .feature-card:hover { background: var(--surface-2); }
+
+    .feature-icon {
+      width: 44px; height: 44px;
+      border-radius: 10px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 1rem;
+      color: var(--accent-2);
+    }
+
+    .feature-card h3 { font-size: .95rem; font-weight: 700; margin-bottom: .35rem; }
+    .feature-card p  { font-size: .85rem; color: var(--muted); line-height: 1.65; }
+
+    /* ──────────── SCREENSHOTS ──────────── */
+    #screenshots { background: var(--bg); }
+
+    .screenshots-grid {
+      display: grid;
+      grid-template-columns: repeat(2,1fr);
+      gap: 14px;
+    }
+
+    .shot-item {
+      border-radius: 10px; overflow: hidden;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: transform .25s, border-color .25s, box-shadow .25s;
+    }
+    .shot-item:hover {
+      transform: translateY(-5px);
+      border-color: var(--accent);
+      box-shadow: 0 10px 35px rgba(80,104,244,.2);
+    }
+    .shot-item img { width: 100%; display: block; }
+
+    .shot-label {
+      padding: 9px 14px;
+      background: var(--surface);
+      font-size: .78rem; font-weight: 600;
+      color: var(--muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .shot-label svg { opacity: .6; }
+
+    /* ──────────── LIGHTBOX ──────────── */
+    .lightbox {
+      display: none; position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,.92);
+      align-items: center; justify-content: center;
+      padding: 2rem;
+    }
+    .lightbox.open { display: flex; }
+    .lightbox img {
+      max-width: 92vw; max-height: 88vh;
+      border-radius: 10px; border: 1px solid var(--border);
+      box-shadow: 0 30px 80px rgba(0,0,0,.8);
+    }
+    .lb-close {
+      position: absolute; top: 1.25rem; right: 1.25rem;
+      background: var(--surface-2); border: 1px solid var(--border);
+      color: var(--text); width: 40px; height: 40px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 1.1rem;
+      transition: background .2s;
+    }
+    .lb-close:hover { background: var(--surface-3); }
+
+    /* ──────────── CHANGELOG ──────────── */
+    #changelog { background: var(--surface); }
+
+    .changelog-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .rel-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+    }
+
+    .rel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 15px 20px; cursor: pointer; user-select: none;
+      transition: background .15s;
+    }
+    .rel-header:hover { background: var(--surface-3); }
+
+    .rel-tag {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 700; font-size: .95rem;
+    }
+    .rel-latest {
+      font-size: .68rem; padding: 2px 9px; border-radius: 100px;
+      background: rgba(80,104,244,.15); color: var(--accent-2);
+      border: 1px solid rgba(80,104,244,.3); font-weight: 600;
+    }
+
+    .rel-meta {
+      display: flex; align-items: center; gap: 12px;
+      font-size: .78rem; color: var(--muted);
+    }
+
+    .rel-chevron { transition: transform .2s; color: var(--dim); }
+    .rel-card.open .rel-chevron { transform: rotate(180deg); }
+
+    .rel-body {
+      display: none;
+      padding: 12px 20px 16px;
+      font-size: .855rem; color: var(--muted); line-height: 1.7;
+      border-top: 1px solid var(--border);
+    }
+    .rel-body.open { display: block; }
+    .rel-body ul  { padding-left: 1.2rem; margin: 4px 0; }
+    .rel-body li  { margin-bottom: 3px; }
+    .rel-body strong { color: var(--text); }
+    .rel-body code {
+      background: var(--surface-3); padding: 1px 5px;
+      border-radius: 4px; font-size: .82em;
+    }
+    .rel-body p { margin-bottom: 4px; }
+
+    /* Skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.6s infinite;
+      border-radius: 6px;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ──────────── FAQ ──────────── */
+    #faq { background: var(--bg); }
+
+    .faq-list { display: flex; flex-direction: column; gap: 8px; max-width: 740px; }
+
+    .faq-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+    }
+
+    .faq-q {
+      padding: 15px 20px;
+      font-weight: 600; font-size: .9rem;
+      cursor: pointer; user-select: none;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 1rem;
+      transition: background .15s;
+    }
+    .faq-q:hover { background: var(--surface-2); }
+    .faq-chevron { flex-shrink: 0; transition: transform .2s; color: var(--dim); }
+    .faq-item.open .faq-chevron { transform: rotate(180deg); }
+
+    .faq-a {
+      display: none;
+      padding: 0 20px 14px; margin-top: -2px;
+      font-size: .855rem; color: var(--muted); line-height: 1.7;
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+    .faq-item.open .faq-a { display: block; }
+    .faq-a a { color: var(--accent-2); }
+
+    /* ──────────── CTA ──────────── */
+    .cta-section {
+      padding: 90px clamp(1rem,4vw,2rem);
+      background: var(--surface);
+      text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .cta-glow {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 700px; height: 300px;
+      background: radial-gradient(ellipse, rgba(80,104,244,.1), transparent 70%);
+      pointer-events: none;
+    }
+    .cta-inner { position: relative; max-width: 600px; margin: 0 auto; }
+    .cta-inner h2 {
+      font-size: clamp(1.75rem,4vw,2.4rem);
+      font-weight: 800; letter-spacing: -.025em;
+      margin-bottom: .65rem;
+    }
+    .cta-inner > p { color: var(--muted); margin-bottom: 2rem; }
+
+    /* ──────────── FOOTER ──────────── */
+    footer {
+      padding: 1.75rem clamp(1rem,4vw,2.5rem);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center;
+      justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+      font-size: .8rem; color: var(--muted);
+    }
+    .footer-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 600; color: var(--muted);
+    }
+    .footer-links { display: flex; gap: 1.5rem; }
+    .footer-links a { color: var(--muted); text-decoration: none; transition: color .2s; }
+    .footer-links a:hover { color: var(--text); }
+
+    /* ──────────── RESPONSIVE ──────────── */
+    @media (max-width: 720px) {
+      .screenshots-grid { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+      footer { flex-direction: column; align-items: flex-start; }
+      .features-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 7px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2" fill="#5068f4" stroke="none" opacity=".7"/>
+      <polyline points="2 12 12 17 22 12" stroke="#8fa0ff"/>
+      <polyline points="2 17 12 22 22 17" stroke="#a78bfa" opacity=".7"/>
+    </svg>
+    Crystal Launcher
+  </a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#screenshots">Screenshots</a></li>
+    <li><a href="#changelog">Changelog</a></li>
+    <li><a href="#faq">FAQ</a></li>
+    <li>
+      <a href="https://discord.gg/X5ZUWZfvZe" target="_blank" rel="noopener" class="nav-btn">
+        Join Discord
+      </a>
+    </li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-dots"></div>
+
+  <div class="hero-badge">
+    <span class="dot"></span>
+    <span id="badge-text">Loading latest release…</span>
+  </div>
+
+  <h1>The Minecraft Launcher<br><span class="grad">You Deserve</span></h1>
+  <p>Mods, profiles, worlds &amp; more — everything beautifully organized in one place. Free, forever.</p>
+
+  <div class="hero-buttons">
+    <a href="#" class="btn-primary" id="hero-dl">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download for Windows
+    </a>
+    <a href="https://discord.gg/X5ZUWZfvZe" target="_blank" rel="noopener" class="btn-secondary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028 14.09 14.09 0 001.226-1.994.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03z"/></svg>
+      Join Discord
+    </a>
+  </div>
+  <p class="hero-sub" id="hero-sub">Windows 10 / 11 · Free · Open Source</p>
+
+  <div class="hero-window">
+    <div class="window-bar">
+      <span class="red"></span>
+      <span class="yell"></span>
+      <span class="gre"></span>
+    </div>
+    <img src="assets/screenshots/play.png" alt="Crystal Launcher – Main screen">
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <div class="section-label">Features</div>
+    <h2 class="section-title">Everything you need. Nothing you don't.</h2>
+    <p class="section-sub">Crystal Launcher brings the best Minecraft experience together in one clean, fast app.</p>
+    <div class="features-grid">
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </div>
+        <h3>Play Any Version</h3>
+        <p>Launch Vanilla, Forge, NeoForge, Fabric and more with a single click. Switch versions in seconds.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </div>
+        <h3>Built-in Mod Manager</h3>
+        <p>Browse and install mods, shaders, resource packs and modpacks from Modrinth &amp; CurseForge — no manual downloads needed.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        </div>
+        <h3>Profile System</h3>
+        <p>Create unlimited game profiles — each with its own version, loader and mod set. Switch instantly.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        </div>
+        <h3>World Manager</h3>
+        <p>View, backup and organize all your saved worlds. Never lose a save again.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        </div>
+        <h3>Live Console</h3>
+        <p>Monitor your game in real time. Automatic crash analysis helps you diagnose problems fast.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a4 4 0 01-4-4V6a2 2 0 012-2"/><line x1="9" y1="22" x2="9" y2="12"/><path d="M14 22v-4a2 2 0 114 0v4"/><path d="M10 6h4v4h-4z"/></svg>
+        </div>
+        <h3>Minecraft News</h3>
+        <p>Stay up to date with the latest snapshots and releases, directly inside the launcher.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- SCREENSHOTS -->
+<section id="screenshots">
+  <div class="container">
+    <div class="section-label">Screenshots</div>
+    <h2 class="section-title">See it in action</h2>
+    <p class="section-sub">A clean, dark interface that gets out of your way and lets you focus on playing.</p>
+    <div class="screenshots-grid">
+
+      <div class="shot-item" onclick="openLightbox('assets/screenshots/play.png')">
+        <img src="assets/screenshots/play.png" alt="Play screen" loading="lazy">
+        <div class="shot-label">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Play
+        </div>
+      </div>
+
+      <div class="shot-item" onclick="openLightbox('assets/screenshots/mods.png')">
+        <img src="assets/screenshots/mods.png" alt="Mod manager" loading="lazy">
+        <div class="shot-label">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Mod Manager
+        </div>
+      </div>
+
+      <div class="shot-item" onclick="openLightbox('assets/screenshots/worlds.png')">
+        <img src="assets/screenshots/worlds.png" alt="World manager" loading="lazy">
+        <div class="shot-label">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+          Worlds
+        </div>
+      </div>
+
+      <div class="shot-item" onclick="openLightbox('assets/screenshots/news.png')">
+        <img src="assets/screenshots/news.png" alt="News feed" loading="lazy">
+        <div class="shot-label">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a4 4 0 01-4-4V6a2 2 0 012-2"/></svg>
+          News
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <img id="lb-img" src="" alt="">
+  <button class="lb-close" onclick="closeLightbox()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+</div>
+
+<!-- CHANGELOG -->
+<section id="changelog">
+  <div class="container">
+    <div class="section-label">Changelog</div>
+    <h2 class="section-title">What's new</h2>
+    <p class="section-sub">Crystal Launcher is updated regularly. New features and fixes ship automatically.</p>
+    <div class="changelog-list" id="changelog-list">
+      <!-- skeleton -->
+      <div class="rel-card"><div class="rel-header"><div class="skeleton" style="height:18px;width:120px;"></div><div class="skeleton" style="height:14px;width:90px;"></div></div></div>
+      <div class="rel-card"><div class="rel-header"><div class="skeleton" style="height:18px;width:100px;"></div><div class="skeleton" style="height:14px;width:90px;"></div></div></div>
+      <div class="rel-card"><div class="rel-header"><div class="skeleton" style="height:18px;width:110px;"></div><div class="skeleton" style="height:14px;width:90px;"></div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <div class="container">
+    <div class="section-label">FAQ</div>
+    <h2 class="section-title">Frequently asked questions</h2>
+    <p class="section-sub">Got a question? We've got answers.</p>
+    <div class="faq-list">
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          Is Crystal Launcher free?
+          <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-a">Yes! Crystal Launcher is completely free and open source. Download and use it without any cost — forever.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          Do I need a Minecraft account?
+          <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-a">Yes — you need a valid Microsoft account with Minecraft Java Edition purchased. Crystal Launcher uses official Microsoft authentication, so your account is always secure.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          Which Windows version is supported?
+          <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-a">Crystal Launcher supports Windows 10 and Windows 11 (64-bit). No macOS or Linux builds are available at this time.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          Can I use mods with Crystal Launcher?
+          <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-a">Absolutely! Crystal Launcher has a built-in mod browser powered by Modrinth and CurseForge. You can search and install mods, resource packs, shaders and modpacks directly from the launcher — no manual downloads needed.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          Does Crystal Launcher update automatically?
+          <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-a">Yes! Crystal Launcher checks for updates on every startup and notifies you when a new version is available. Updates download and install with a single click.</div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          How do I get help if something doesn't work?
+          <svg class="faq-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="faq-a">Join the <a href="https://discord.gg/X5ZUWZfvZe" target="_blank" rel="noopener">Discord server</a> — we're happy to help there! You can also open an issue on <a href="https://github.com/TotalyNotAlex/crystal-launcher" target="_blank" rel="noopener">GitHub</a>.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<div class="cta-section">
+  <div class="cta-glow"></div>
+  <div class="cta-inner">
+    <h2>Ready to play?</h2>
+    <p>Download Crystal Launcher for free and get started in minutes.</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <a href="#" class="btn-primary" id="cta-dl">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download for Windows
+      </a>
+      <a href="https://discord.gg/X5ZUWZfvZe" target="_blank" rel="noopener" class="btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028 14.09 14.09 0 001.226-1.994.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03z"/></svg>
+        Join Discord
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2" fill="#5068f4" stroke="none" opacity=".7"/>
+      <polyline points="2 12 12 17 22 12" stroke="#8fa0ff"/>
+      <polyline points="2 17 12 22 22 17" stroke="#a78bfa" opacity=".7"/>
+    </svg>
+    Crystal Launcher · Made by TotalyNotAlex
+  </div>
+  <div class="footer-links">
+    <a href="https://github.com/TotalyNotAlex/crystal-launcher" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://discord.gg/X5ZUWZfvZe" target="_blank" rel="noopener">Discord</a>
+  </div>
+</footer>
+
+<script>
+  const REPO = 'TotalyNotAlex/crystal-launcher';
+  const FALLBACK = `https://github.com/${REPO}/releases/latest`;
+
+  /* ── GitHub API ── */
+  async function loadLatest() {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`);
+      if (!r.ok) throw new Error();
+      const rel = await r.json();
+
+      const ver = rel.tag_name || 'latest';
+      const asset = rel.assets?.find(a =>
+        a.name.toLowerCase().includes('setup') && a.name.toLowerCase().endsWith('.exe')
+      );
+      const url = asset?.browser_download_url || FALLBACK;
+
+      document.getElementById('badge-text').textContent = `${ver} — Now available`;
+      document.getElementById('hero-sub').textContent   = `Windows 10 / 11 · Free · Open Source · ${ver}`;
+      document.getElementById('hero-dl').href  = url;
+      document.getElementById('cta-dl').href   = url;
+    } catch {
+      document.getElementById('badge-text').textContent = 'Available on GitHub';
+      document.getElementById('hero-dl').href = FALLBACK;
+      document.getElementById('cta-dl').href  = FALLBACK;
+    }
+  }
+
+  async function loadChangelog() {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=8`);
+      if (!r.ok) throw new Error();
+      const releases = await r.json();
+
+      // Sort newest first, skip the old v1.1.0 outlier
+      const sorted = releases
+        .filter(rel => rel.tag_name !== 'v1.1.0')
+        .sort((a, b) => new Date(b.published_at) - new Date(a.published_at))
+        .slice(0, 5);
+
+      const list = document.getElementById('changelog-list');
+      list.innerHTML = '';
+
+      sorted.forEach((rel, i) => {
+        const date = new Date(rel.published_at).toLocaleDateString('en-US', {
+          year: 'numeric', month: 'short', day: 'numeric'
+        });
+        const bodyHtml = parseMarkdown(rel.body || '_No release notes provided._');
+        const card = document.createElement('div');
+        card.className = 'rel-card' + (i === 0 ? ' open' : '');
+        card.innerHTML = `
+          <div class="rel-header" onclick="toggleRelease(this.parentElement)">
+            <div class="rel-tag">
+              ${esc(rel.tag_name)}
+              ${i === 0 ? '<span class="rel-latest">Latest</span>' : ''}
+            </div>
+            <div class="rel-meta">
+              <span>${date}</span>
+              <svg class="rel-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+          <div class="rel-body ${i === 0 ? 'open' : ''}">${bodyHtml}</div>
+        `;
+        list.appendChild(card);
+      });
+    } catch {
+      document.getElementById('changelog-list').innerHTML =
+        `<p style="color:var(--muted);font-size:.875rem;">Could not load changelog. <a href="https://github.com/${REPO}/releases" target="_blank" style="color:var(--accent-2)">View on GitHub →</a></p>`;
+    }
+  }
+
+  /* ── Markdown parser (basic) ── */
+  function esc(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function inline(text) {
+    return esc(text)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g,     '<em>$1</em>')
+      .replace(/`([^`]+)`/g,     '<code>$1</code>');
+  }
+
+  function parseMarkdown(md) {
+    const lines = md.split('\n');
+    let html = '';
+    let inList = false;
+
+    for (let raw of lines) {
+      const line = raw.trimEnd();
+
+      if (!line.trim()) {
+        if (inList) { html += '</ul>'; inList = false; }
+        continue;
+      }
+
+      if (/^#{1,3} /.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<strong>${inline(line.replace(/^#{1,3} /, ''))}</strong><br>`;
+        continue;
+      }
+
+      if (/^[-*] /.test(line)) {
+        if (!inList) { html += '<ul>'; inList = true; }
+        html += `<li>${inline(line.slice(2))}</li>`;
+        continue;
+      }
+
+      if (inList) { html += '</ul>'; inList = false; }
+      html += `<p>${inline(line)}</p>`;
+    }
+
+    if (inList) html += '</ul>';
+    return html;
+  }
+
+  /* ── UI interactions ── */
+  function toggleRelease(card) {
+    card.classList.toggle('open');
+    card.querySelector('.rel-body').classList.toggle('open');
+  }
+
+  function toggleFaq(btn) {
+    btn.parentElement.classList.toggle('open');
+  }
+
+  function openLightbox(src) {
+    document.getElementById('lb-img').src = src;
+    document.getElementById('lightbox').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+  /* ── Init ── */
+  loadLatest();
+  loadChangelog();
+</script>
+</body>
+</html>
