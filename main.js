@@ -40,6 +40,8 @@ const crashAnalyzer = require('./services/crashAnalyzer');
 const repairService = require('./services/repairService');
 const os = require('os');
 let bgUpdatePath = null;
+let activeUpdateDownload = null;
+let activeUpdateProgress = 0;
 
 let mainWindow = null;
 const isUpdateRestart = process.argv.includes('--updated');
@@ -329,11 +331,11 @@ app.whenReady().then(() => {
       if (update.hasUpdate && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('update-available', update);
         try {
-          if (update.downloadUrl) {
+          if (update.downloadUrl && !activeUpdateDownload) {
             const dest = path.join(baseDataDir, 'update_setup.exe');
-            // Drop any cached installer (always re-fetch the correct one)
-            if (fs.existsSync(dest)) { try { fs.unlinkSync(dest); } catch {} }
-            updateService.downloadUpdate(update.downloadUrl, dest, (pct) => {
+            activeUpdateProgress = 0;
+            activeUpdateDownload = updateService.downloadUpdate(update.downloadUrl, dest, (pct) => {
+              activeUpdateProgress = pct;
               if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.webContents.send('update-progress', { percent: pct, status: `Pre-downloading update... ${pct}%`, background: true });
               }
@@ -348,7 +350,11 @@ app.whenReady().then(() => {
               if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.webContents.send('update-progress', { percent: 100, status: 'Update ready — Restart anytime', background: true, ready: true });
               }
-            }).catch(() => {});
+            }).catch((err) => {
+              console.warn('[update] pre-download failed:', err.message);
+            }).finally(() => {
+              activeUpdateDownload = null;
+            });
           }
         } catch {}
       }
@@ -1149,6 +1155,30 @@ ipcMain.handle('download-update', async (e, downloadUrl) => {
     if (!downloadUrl) return { success: false, error: 'No download URL for this update' };
     const update = await updateService.checkForUpdates().catch(() => null);
     const dest = path.join(baseDataDir, 'update_setup.exe');
+
+    // If already pre-downloaded and verified, install immediately
+    if (bgUpdatePath && fs.existsSync(bgUpdatePath)) {
+      const check = verifyInstallerHash(bgUpdatePath, update && update.sha256);
+      if (check.ok) {
+        fs.writeFileSync(path.join(baseDataDir, '.updated'), '1');
+        spawn(bgUpdatePath, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+        setTimeout(() => { mainWindow?.destroy(); app.quit(); }, 4000);
+        return { success: true };
+      }
+    }
+
+    // If pre-download is currently running, wait for it instead of colliding
+    if (activeUpdateDownload) {
+      e.sender.send('update-progress', { percent: activeUpdateProgress || 50, status: 'Downloading update...' });
+      await activeUpdateDownload;
+      if (bgUpdatePath && fs.existsSync(bgUpdatePath)) {
+        fs.writeFileSync(path.join(baseDataDir, '.updated'), '1');
+        spawn(bgUpdatePath, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+        setTimeout(() => { mainWindow?.destroy(); app.quit(); }, 4000);
+        return { success: true };
+      }
+    }
+
     const isLocal = downloadUrl.match(/^[A-Z]:\\/i) || downloadUrl.startsWith('file://') || downloadUrl.startsWith('\\\\');
     if (isLocal) {
       const local = downloadUrl.replace(/^file:\/\//i, '');
@@ -1160,9 +1190,13 @@ ipcMain.handle('download-update', async (e, downloadUrl) => {
     }
     if (fs.existsSync(dest)) { try { fs.unlinkSync(dest); } catch {} }
     e.sender.send('update-progress', { percent: 0, status: 'Downloading update...' });
-    await updateService.downloadUpdate(downloadUrl, dest, (pct) => {
+    activeUpdateProgress = 0;
+    activeUpdateDownload = updateService.downloadUpdate(downloadUrl, dest, (pct) => {
+      activeUpdateProgress = pct;
       e.sender.send('update-progress', { percent: pct, status: `Downloading... ${pct}%` });
     });
+    await activeUpdateDownload;
+    activeUpdateDownload = null;
     e.sender.send('update-progress', { percent: 100, status: 'Download complete' });
     const check = verifyInstallerHash(dest, update && update.sha256);
     if (!check.ok) {
@@ -1170,11 +1204,15 @@ ipcMain.handle('download-update', async (e, downloadUrl) => {
       console.error('[update] rejected installer:', check.error);
       return { success: false, error: check.error };
     }
+    bgUpdatePath = dest;
     fs.writeFileSync(path.join(baseDataDir, '.updated'), '1');
     spawn(dest, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     setTimeout(() => { mainWindow?.destroy(); app.quit(); }, 4000);
     return { success: true };
-  } catch (err) { return { success: false, error: err.message }; }
+  } catch (err) {
+    activeUpdateDownload = null;
+    return { success: false, error: err.message };
+  }
 });
 
 ipcMain.handle('backup-profile', async (e, { profileId }) => {
@@ -1613,6 +1651,17 @@ ipcMain.handle('download-update-bg', async (e, downloadUrl) => {
     if (!downloadUrl) return { success: false, error: 'No URL' };
     const update = await updateService.checkForUpdates().catch(() => null);
     const dest = path.join(baseDataDir, 'update_setup.exe');
+
+    if (bgUpdatePath && fs.existsSync(bgUpdatePath)) {
+      return { success: true, path: bgUpdatePath, ready: true };
+    }
+    if (activeUpdateDownload) {
+      await activeUpdateDownload;
+      if (bgUpdatePath && fs.existsSync(bgUpdatePath)) {
+        return { success: true, path: bgUpdatePath, ready: true };
+      }
+    }
+
     if (downloadUrl.match(/^[A-Z]:\\/i) || downloadUrl.startsWith('file://') || downloadUrl.startsWith('\\\\')) {
       const local = downloadUrl.replace(/^file:\/\//i, '');
       if (!fs.existsSync(local)) return { success: false, error: 'Installer not found' };
@@ -1622,9 +1671,14 @@ ipcMain.handle('download-update-bg', async (e, downloadUrl) => {
       }
     }
     if (fs.existsSync(dest)) { try { fs.unlinkSync(dest); } catch {} }
-    await updateService.downloadUpdate(downloadUrl, dest, (pct) => {
+    activeUpdateProgress = 0;
+    activeUpdateDownload = updateService.downloadUpdate(downloadUrl, dest, (pct) => {
+      activeUpdateProgress = pct;
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', { percent: pct, status: `Downloading update... ${pct}%`, background: true });
     });
+    await activeUpdateDownload;
+    activeUpdateDownload = null;
+
     const bgCheck = verifyInstallerHash(dest, update && update.sha256);
     if (!bgCheck.ok) {
       try { fs.unlinkSync(dest); } catch {}
@@ -1635,7 +1689,10 @@ ipcMain.handle('download-update-bg', async (e, downloadUrl) => {
     fs.writeFileSync(path.join(baseDataDir, '.updated'), '1');
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', { percent: 100, status: 'Update ready', background: true, ready: true });
     return { success: true, path: dest, ready: true };
-  } catch (err) { return { success: false, error: err.message }; }
+  } catch (err) {
+    activeUpdateDownload = null;
+    return { success: false, error: err.message };
+  }
 });
 
 ipcMain.handle('install-bg-update', async () => {

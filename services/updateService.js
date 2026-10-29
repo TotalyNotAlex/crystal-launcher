@@ -85,20 +85,31 @@ class UpdateService {
       if (onProgress) onProgress(100);
       return destPath;
     }
-    const writer = fs.createWriteStream(destPath);
-    const res = await axios.get(downloadUrl, { responseType: 'stream', timeout: 120000, maxRedirects: 5 });
-    const total = parseInt(res.headers['content-length'] || '0');
-    let downloaded = 0;
-    res.data.on('data', (chunk) => {
-      downloaded += chunk.length;
-      if (onProgress && total) onProgress(Math.round((downloaded / total) * 100));
-    });
-    await new Promise((resolve, reject) => {
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-      res.data.pipe(writer);
-    });
-    return destPath;
+    const tmpPath = `${destPath}.${process.pid}.${Date.now()}.tmp`;
+    const writer = fs.createWriteStream(tmpPath);
+    try {
+      const res = await axios.get(downloadUrl, { responseType: 'stream', timeout: 120000, maxRedirects: 5 });
+      const total = parseInt(res.headers['content-length'] || '0');
+      let downloaded = 0;
+      res.data.on('data', (chunk) => {
+        downloaded += chunk.length;
+        if (onProgress && total) onProgress(Math.round((downloaded / total) * 100));
+      });
+      await new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', (err) => { try { fs.unlinkSync(tmpPath); } catch {} reject(err); });
+        res.data.on('error', (err) => { try { fs.unlinkSync(tmpPath); } catch {} reject(err); });
+        res.data.pipe(writer);
+      });
+      if (fs.existsSync(destPath)) {
+        try { fs.unlinkSync(destPath); } catch {}
+      }
+      fs.renameSync(tmpPath, destPath);
+      return destPath;
+    } catch (err) {
+      try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch {}
+      throw err;
+    }
   }
 
   async installUpdate(updatePath) {
