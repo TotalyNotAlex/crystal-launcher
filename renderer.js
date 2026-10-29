@@ -40,7 +40,7 @@ function translatePage() {
   });
 }
 
-async function setLanguage(lang) {
+async function setLanguage(lang, persist = false) {
   const data = await window.api.getTranslations(lang);
   if (data) {
     translations = data;
@@ -53,7 +53,7 @@ async function setLanguage(lang) {
   translatePage();
   const sel = $('language-select');
   if (sel) sel.value = currentLang;
-  saveSettings();
+  if (persist) saveSettings();
 }
 
 let versionsData = { vanilla: null, fabric: null, quilt: null, forge: null, neoforge: null };
@@ -69,6 +69,35 @@ let currentRam = 4;
 let currentJvm = '';
 let currentKeepOpen = true;
 let fullVersions = [];
+
+let currentSkins = [];
+let activeSkinName = 'default';
+let skinModelType = 'slim';
+let lastSkinApplyAt = 0;
+
+function getSkinHeadDataUrl(base64Png, size = 40) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        // Head base: x=8, y=8, w=8, h=8
+        ctx.drawImage(img, 8, 8, 8, 8, 0, 0, size, size);
+        // Head hat/outer layer: x=40, y=8, w=8, h=8
+        ctx.drawImage(img, 40, 8, 8, 8, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/png'));
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = 'data:image/png;base64,' + base64Png;
+  });
+}
 
 const loaderNames = { vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge' };
 
@@ -853,10 +882,27 @@ function updateAccounts() {
   const avatarImg = $('sidebar-avatar-img');
   const avatarFallback = $('sidebar-avatar-fallback');
   if (active?.name) {
-    avatarImg.src = `https://crafatar.com/avatars/${active.name}?size=40&overlay`;
-    avatarImg.style.display = 'block';
-    avatarImg.onerror = () => { avatarImg.style.display = 'none'; avatarFallback.style.display = 'block'; };
-    avatarFallback.style.display = 'none';
+    const equipped = activeSkinName && activeSkinName !== 'default'
+      ? currentSkins.find((s) => s.name === activeSkinName)
+      : null;
+    if (equipped && equipped.data) {
+      getSkinHeadDataUrl(equipped.data, 40).then((headUrl) => {
+        if (headUrl) {
+          avatarImg.src = headUrl;
+          avatarImg.style.display = 'block';
+          avatarFallback.style.display = 'none';
+        } else {
+          avatarImg.src = `https://crafatar.com/avatars/${active.name}?size=40&overlay`;
+          avatarImg.style.display = 'block';
+          avatarFallback.style.display = 'none';
+        }
+      });
+    } else {
+      avatarImg.src = `https://crafatar.com/avatars/${active.name}?size=40&overlay`;
+      avatarImg.style.display = 'block';
+      avatarImg.onerror = () => { avatarImg.style.display = 'none'; avatarFallback.style.display = 'block'; };
+      avatarFallback.style.display = 'none';
+    }
   } else {
     avatarImg.style.display = 'none';
     avatarFallback.style.display = 'block';
@@ -1250,7 +1296,7 @@ function initSettings() {
   $('btn-game-folder').onclick = () => window.api.openGameFolder();
   $('btn-versions-folder').onclick = () => window.api.openVersionsFolder();
   $('btn-backups-folder').onclick = () => window.api.openBackupsFolder();
-  $('language-select').onchange = function () { setLanguage(this.value); };
+  $('language-select').onchange = function () { setLanguage(this.value, true); };
 
   document.querySelectorAll('.accent-swatch').forEach((swatch) => {
     swatch.onclick = function () {
@@ -1311,18 +1357,19 @@ $('btn-play').onclick = async function () {
   $('progress-text').textContent = 'Checking Java 21+...';
   $('progress-fill').style.width = '0%';
 
-  // Re-apply selected skin before launch so it is live in Minecraft (throttled)
+  // Re-apply the selected skin before launch so it is live in Minecraft.
+  // Only ever upload a real file: passing "default" used to delete the skin.
   try {
     const activeAccount = accounts.find((a) => a.id === activeAccountId);
-    if (activeAccount?.type === 'microsoft' && Date.now() - lastSkinApplyAt > 60000) {
-      let skinPath = 'default';
-      if (activeSkinName && activeSkinName !== 'default') {
-        const skins = await window.api.getSavedSkins();
-        const sel = skins.find((s) => s.name === activeSkinName);
-        if (sel?.path) skinPath = sel.path;
+    if (activeAccount?.type === 'microsoft' && activeSkinName && activeSkinName !== 'default' && Date.now() - lastSkinApplyAt > 60000) {
+      const skins = await window.api.getSavedSkins();
+      const sel = skins.find((s) => s.name === activeSkinName);
+      if (sel?.path) {
+        const applied = await applyActiveSkinToMinecraft(sel.path);
+        if (!applied.success && !applied.skipped) console.warn('Pre-launch skin apply failed:', applied.error);
+      } else {
+        console.warn(`Saved skin "${activeSkinName}" is missing on disk - leaving the Minecraft skin untouched.`);
       }
-      const applied = await applyActiveSkinToMinecraft(skinPath);
-      if (!applied.success) console.warn('Pre-launch skin apply failed:', applied.error);
     }
   } catch (skinErr) { console.warn('Pre-launch skin apply error:', skinErr); }
 
@@ -1571,8 +1618,8 @@ $('mods-check-updates-btn').onclick = async function () {
 async function init() {
   try {
     loadingStatus.textContent = 'Fetching manifests...';
-    const [fetchedVersions, fetchedAccounts, fetchedProfiles, settings, appVersion] = await Promise.all([
-      window.api.getVersions(), window.api.getAccounts(), window.api.getProfiles(), window.api.getSettings(), window.api.getAppVersion(),
+    const [fetchedVersions, fetchedAccounts, fetchedProfiles, settings, appVersion, fetchedSkins] = await Promise.all([
+      window.api.getVersions(), window.api.getAccounts(), window.api.getProfiles(), window.api.getSettings(), window.api.getAppVersion(), window.api.getSavedSkins(),
     ]);
     const vDisplay = $('app-version-display');
     const vBadge = $('app-version-badge');
@@ -1582,6 +1629,7 @@ async function init() {
     versionsData = fetchedVersions;
     accounts = fetchedAccounts;
     profiles = fetchedProfiles;
+    currentSkins = Array.isArray(fetchedSkins) ? fetchedSkins : [];
 
     if (settings.activeAccountId && accounts.some((a) => a.id === settings.activeAccountId)) activeAccountId = settings.activeAccountId;
     else if (accounts.length) activeAccountId = accounts[0].id;
@@ -1594,12 +1642,18 @@ async function init() {
     if (settings.defaultRam) currentRam = settings.defaultRam;
     if (settings.jvmArgs !== undefined) currentJvm = settings.jvmArgs;
     if (settings.keepLauncherOpen !== undefined) currentKeepOpen = settings.keepLauncherOpen;
-    if (settings.language) await setLanguage(settings.language);
-    if (settings.activeSkinName) activeSkinName = settings.activeSkinName;
+    if (settings.activeSkinName) {
+      if (settings.activeSkinName === 'default' || currentSkins.some((s) => s.name === settings.activeSkinName)) {
+        activeSkinName = settings.activeSkinName;
+      } else {
+        activeSkinName = 'default';
+      }
+    }
     if (settings.skinModelType) {
       skinModelType = settings.skinModelType === 'classic' ? 'classic' : 'slim';
       document.querySelectorAll('.model-btn').forEach((b) => b.classList.toggle('active', b.dataset.model === skinModelType));
     }
+    if (settings.language) await setLanguage(settings.language, false);
 
     document.querySelectorAll('.ram-btn').forEach((b) => b.classList.toggle('active', parseInt(b.dataset.ram) === currentRam));
     $('input-jvm').value = currentJvm;
@@ -1702,14 +1756,9 @@ async function init() {
 }
 
 // Skin Changer
-let currentSkins = [];
-let activeSkinName = 'default';
-let skinModelType = 'slim';
-let lastSkinApplyAt = 0;
-
-async function applyActiveSkinToMinecraft(skinPath) {
-  const result = await window.api.applyMicrosoftSkin(skinPath, skinModelType, activeAccountId);
-  if (result?.success) lastSkinApplyAt = Date.now();
+async function applyActiveSkinToMinecraft(skinPath, options = {}) {
+  const result = await window.api.applyMicrosoftSkin(skinPath, skinModelType, activeAccountId, options.remove === true);
+  if (result?.success && !result.skipped) lastSkinApplyAt = Date.now();
   return result;
 }
 
@@ -1809,9 +1858,11 @@ function renderSkinList() {
     activeSkinName = 'default';
     loadSkinToPreview('default', null);
     renderSkinList();
+    saveSettings();
+    updateAccounts();
     if (activeAccount?.type === 'microsoft') {
       toast('Resetting skin...', 'Applying default via Minecraft API');
-      const apply = await applyActiveSkinToMinecraft('default');
+      const apply = await applyActiveSkinToMinecraft('default', { remove: true });
       if (apply.success) toast('Skin reset', 'Default skin applied — shows in Minecraft immediately');
       else toast('Reset failed', apply.error, 'error');
     }
@@ -1828,6 +1879,8 @@ function renderSkinList() {
       activeSkinName = s.name;
       loadSkinToPreview(s.name, s.data);
       renderSkinList();
+      saveSettings();
+      updateAccounts();
       if (activeAccount?.type === 'microsoft' && s.path) {
         toast('Applying skin...', `Uploading "${s.name}" to Minecraft API`);
         const apply = await applyActiveSkinToMinecraft(s.path);
@@ -1844,9 +1897,11 @@ function renderSkinList() {
         if (activeSkinName === s.name) {
           activeSkinName = 'default';
           loadSkinToPreview('default', null);
+          saveSettings();
         }
         currentSkins = await window.api.getSavedSkins();
         renderSkinList();
+        updateAccounts();
       }
     };
     list.appendChild(el);
@@ -1875,10 +1930,11 @@ $('skin-reset-btn').onclick = async () => {
   loadSkinToPreview('default', null);
   renderSkinList();
   saveSettings();
+  updateAccounts();
   const active = accounts.find((a) => a.id === activeAccountId);
   if (active?.type === 'microsoft') {
-    toast('Resetting skin...', 'Applying default via Mojang API');
-    const apply = await applyActiveSkinToMinecraft('default');
+    toast('Resetting skin...', 'Applying default via Minecraft API');
+    const apply = await applyActiveSkinToMinecraft('default', { remove: true });
     if (apply.success) toast('Skin reset', 'Default skin applied — shows in Minecraft immediately');
     else toast('Reset failed', apply.error, 'error');
   }
@@ -1900,6 +1956,7 @@ $('skin-file-input').onchange = async function () {
       renderSkinList();
       loadSkinToPreview(name, base64);
       saveSettings();
+      updateAccounts();
       const active = accounts.find((a) => a.id === activeAccountId);
       if (active?.type === 'microsoft') {
         toast('Applying skin...', 'Uploading to Minecraft API — will show in-game');
@@ -1923,21 +1980,11 @@ async function handleModelToggle(newModel) {
   $(`skin-model-${newModel}`).classList.add('active');
 
   const activeSkin = currentSkins.find((s) => s.name === activeSkinName);
-  if (skinViewer) {
-    const canvas = $('skin-preview-canvas');
-    startSkinViewer(canvas, null, skinModelType);
-  } else {
-    loadSkinToPreview(activeSkinName, activeSkin?.data);
-  }
+  loadSkinToPreview(activeSkinName, activeSkin?.data);
 
   const activeAccount = accounts.find((a) => a.id === activeAccountId);
   if (activeAccount?.type === 'microsoft') {
-    if (activeSkinName === 'default') {
-      toast('Updating model...', 'Setting model variant via Minecraft API');
-      const apply = await applyActiveSkinToMinecraft('default');
-      if (apply.success) toast('Model updated', `Set model variant to ${skinModelType}`);
-      else toast('Update failed', apply.error, 'error');
-    } else if (activeSkin?.path) {
+    if (activeSkin?.path) {
       toast('Updating model...', `Setting ${skinModelType} model via Minecraft API`);
       const apply = await applyActiveSkinToMinecraft(activeSkin.path);
       if (apply.success) toast('Model updated', `Updated to ${skinModelType} model variant`);
@@ -1945,6 +1992,7 @@ async function handleModelToggle(newModel) {
     }
   }
   saveSettings();
+  updateAccounts();
 }
 
 $('skin-model-classic').onclick = () => handleModelToggle('classic');
@@ -1972,6 +2020,7 @@ $('skin-namemc-btn').onclick = async () => {
         renderSkinList();
         loadSkinToPreview(name, result.base64);
         saveSettings();
+        updateAccounts();
         toast('Skin fetched', `Loaded ${name}'s skin from NameMC`);
         input.value = '';
 

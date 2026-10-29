@@ -97,7 +97,7 @@ contextBridge.exposeInMainWorld('api', {
   getSavedSkins: () => ipcRenderer.invoke('get-saved-skins'),
   saveSkinFile: (name, base64Data) => ipcRenderer.invoke('save-skin-file', { name, base64Data }),
   deleteSkin: (name) => ipcRenderer.invoke('delete-skin', name),
-  applyMicrosoftSkin: (skinPath, variant, accountId) => ipcRenderer.invoke('apply-microsoft-skin', { skinPath, variant, accountId }),
+  applyMicrosoftSkin: (skinPath, variant, accountId, remove) => ipcRenderer.invoke('apply-microsoft-skin', { skinPath, variant, accountId, remove }),
   fetchNameMCSkin: (username) => ipcRenderer.invoke('fetch-namemc-skin', username),
   checkModUpdates: (profileId) => ipcRenderer.invoke('check-mod-updates', profileId),
   downloadMcVersion: (version, loaderType) => ipcRenderer.invoke('download-mc-version', { version, loaderType }),

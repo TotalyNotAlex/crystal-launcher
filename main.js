@@ -853,8 +853,14 @@ ipcMain.handle('fetch-namemc-skin', async (e, username) => {
   }
 });
 
-ipcMain.handle('apply-microsoft-skin', async (e, { skinPath, variant, accountId }) => {
+ipcMain.handle('apply-microsoft-skin', async (e, { skinPath, variant, accountId, remove }) => {
   try {
+    if (!remove && (!skinPath || skinPath === 'default')) {
+      // Never touch the live skin unless the player explicitly picked one or
+      // asked for the default. Auto-calls used to DELETE it here, which is why
+      // the skin reverted to Steve after a restart.
+      return { success: true, skipped: true, message: 'No skin selected - current skin left untouched.' };
+    }
     const accounts = getSavedAccounts();
     const settings = getSavedSettings();
     const wantedId = accountId || settings.activeAccountId;
@@ -867,7 +873,7 @@ ipcMain.handle('apply-microsoft-skin', async (e, { skinPath, variant, accountId 
     }
 
     const doUpload = async (token) => {
-      if (skinPath === 'default') {
+      if (remove) {
         const res = await fetch('https://api.minecraftservices.com/minecraft/profile/skins/active', {
           method: 'DELETE',
           headers: { Authorization: 'Bearer ' + token }
