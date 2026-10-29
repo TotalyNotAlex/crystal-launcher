@@ -1,11 +1,12 @@
 {
   "name": "crystal-launcher",
-  "version": "1.4.23",
+  "version": "1.4.24",
   "description": "A sleek, modern Minecraft launcher with Microsoft auth, mod loader support, and profile management.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win"
+    "build": "electron-builder --win",
+    "check:encoding": "node tools/check-encoding.js"
   },
   "keywords": [
     "minecraft",

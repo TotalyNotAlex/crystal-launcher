@@ -751,7 +751,7 @@ async function loadMods(pid) {
     const sorted = sortMods(mods, modSortBy);
     list.innerHTML = '';
     if (!sorted.length) {
-      list.innerHTML = `<div class="mod-empty drag-target">${t('profiles.no_mods')} â€” Drop .jar files here</div>`;
+      list.innerHTML = `<div class="mod-empty drag-target">${t('profiles.no_mods')} — Drop .jar files here</div>`;
     }
     sorted.forEach((m) => {
       const el = document.createElement('div');
@@ -1072,7 +1072,7 @@ async function updateServers() {
         if (!statusEl) return;
         if (ping && ping.online) {
           const players = ping.players ? `${ping.players.online}/${ping.players.max}` : '';
-          statusEl.innerHTML = `<span style="color:var(--success)">&#9679;</span> Online${players ? ` â€” ${players}` : ''}${typeof ping.latency === 'number' ? ` (${ping.latency}ms)` : ''}`;
+          statusEl.innerHTML = `<span style="color:var(--success)">&#9679;</span> Online${players ? ` — ${players}` : ''}${typeof ping.latency === 'number' ? ` (${ping.latency}ms)` : ''}`;
           if (motdEl && ping.motd) { motdEl.style.display = 'block'; motdEl.textContent = ping.motd; }
         } else {
           statusEl.innerHTML = `<span style="color:var(--danger)">&#9679;</span> Offline`;
@@ -1198,11 +1198,11 @@ function showJavaStatus(java) {
   if (java && java.found) {
     el.innerHTML = `<span style="color:var(--success)">&#9679;</span> ${t('settings.java_found', { version: java.version })} (64-bit)`;
   } else if (java && java.version) {
-    el.innerHTML = `<span style="color:var(--danger)">&#9679;</span> Java ${java.version} found but Java 21+ is required${java.reason ? ` â€” ${java.reason}` : ''} <button class="btn btn-secondary" id="java-install-btn-dyn" style="font-size:10px;padding:2px 8px;margin-left:6px;">Install Java 21</button>`;
+    el.innerHTML = `<span style="color:var(--danger)">&#9679;</span> Java ${java.version} found but Java 21+ is required${java.reason ? ` — ${java.reason}` : ''} <button class="btn btn-secondary" id="java-install-btn-dyn" style="font-size:10px;padding:2px 8px;margin-left:6px;">Install Java 21</button>`;
     const dyn = document.getElementById('java-install-btn-dyn');
     if (dyn) dyn.onclick = () => $('java-install-btn')?.click();
   } else {
-    el.innerHTML = `<span style="color:var(--danger)">&#9679;</span> ${t('settings.java_not_found')} â€” Java 21+ will be downloaded on Play`;
+    el.innerHTML = `<span style="color:var(--danger)">&#9679;</span> ${t('settings.java_not_found')} — Java 21+ will be downloaded on Play`;
   }
 }
 
@@ -1229,7 +1229,7 @@ function initSettings() {
   $('btn-browse-screenshots')?.addEventListener('click', async () => {
     const shots = await window.api.listScreenshots();
     if (!shots.length) { toast(t('screenshots.none'), ''); return; }
-    toast(t('screenshots.title'), `${shots.length} screenshot(s) â€” opening folder`);
+    toast(t('screenshots.title'), `${shots.length} screenshot(s) — opening folder`);
     window.api.openScreenshotsFolder();
   });
   const javaPathInput = $('input-java-path');
@@ -1338,8 +1338,8 @@ $('btn-play').onclick = async function () {
       const javaCheck = await window.api.checkJava();
       if (!javaCheck.found) {
         pcText.textContent = javaCheck.needsInstall && javaCheck.version
-          ? `Java ${javaCheck.version} is too old â€” downloading Java 21...`
-          : 'Java 21 not found â€” downloading...';
+          ? `Java ${javaCheck.version} is too old — downloading Java 21...`
+          : 'Java 21 not found — downloading...';
         const installResult = await window.api.installJava();
         if (!installResult.success) {
           throw new Error(installResult.error || 'Java 21 download failed');
@@ -1367,7 +1367,7 @@ $('btn-play').onclick = async function () {
     setTimeout(() => { this.disabled = false; this.textContent = t('play.btn'); pc.classList.remove('active'); }, 3000);
   } else {
     let msg = result.error || t('toast.error');
-    if (msg.includes('Java not found') || msg.includes('Java 21')) msg += ' â€” will retry download in Settings > Java Runtime';
+    if (msg.includes('Java not found') || msg.includes('Java 21')) msg += ' — will retry download in Settings > Java Runtime';
     toast(t('play.error'), msg, 'error');
     pcText.textContent = result.needsLogin ? t('play.sign_in_again') : 'Launch failed';
     this.disabled = false; this.textContent = t('play.btn');
@@ -1533,7 +1533,7 @@ function renderInstalledMods() {
   const sorted = sortMods(installedModsCache, modSortBy);
   list.innerHTML = '';
   if (!sorted.length) {
-    list.innerHTML = `<div class="mod-empty drag-target">${t('profiles.no_mods')} â€” Drop .jar files here</div>`;
+    list.innerHTML = `<div class="mod-empty drag-target">${t('profiles.no_mods')} — Drop .jar files here</div>`;
     return;
   }
   sorted.forEach((m) => {
@@ -1647,7 +1647,7 @@ async function init() {
       }, 800);
     } else {
       loadingStatus.textContent = java.needsInstall && java.version
-        ? `Java ${java.version} is too old â€” downloading Java 21...`
+        ? `Java ${java.version} is too old — downloading Java 21...`
         : 'Downloading Java 21...';
       $('loading-detail').textContent = 'This may take a moment';
       const javaProgress = document.createElement('div');
@@ -1798,7 +1798,7 @@ function renderSkinList() {
   if (typeEl) {
     typeEl.textContent = activeAccount?.type === 'microsoft'
       ? 'Changes apply directly to your official Minecraft account via Minecraft API'
-      : 'Skins saved locally â€” use a skin mod to apply in offline mode';
+      : 'Skins saved locally — use a skin mod to apply in offline mode';
   }
   list.innerHTML = '';
 
@@ -1812,7 +1812,7 @@ function renderSkinList() {
     if (activeAccount?.type === 'microsoft') {
       toast('Resetting skin...', 'Applying default via Minecraft API');
       const apply = await applyActiveSkinToMinecraft('default');
-      if (apply.success) toast('Skin reset', 'Default skin applied â€” shows in Minecraft immediately');
+      if (apply.success) toast('Skin reset', 'Default skin applied — shows in Minecraft immediately');
       else toast('Reset failed', apply.error, 'error');
     }
   };
@@ -1879,7 +1879,7 @@ $('skin-reset-btn').onclick = async () => {
   if (active?.type === 'microsoft') {
     toast('Resetting skin...', 'Applying default via Mojang API');
     const apply = await applyActiveSkinToMinecraft('default');
-    if (apply.success) toast('Skin reset', 'Default skin applied â€” shows in Minecraft immediately');
+    if (apply.success) toast('Skin reset', 'Default skin applied — shows in Minecraft immediately');
     else toast('Reset failed', apply.error, 'error');
   }
 };
@@ -1902,7 +1902,7 @@ $('skin-file-input').onchange = async function () {
       saveSettings();
       const active = accounts.find((a) => a.id === activeAccountId);
       if (active?.type === 'microsoft') {
-        toast('Applying skin...', 'Uploading to Minecraft API â€” will show in-game');
+        toast('Applying skin...', 'Uploading to Minecraft API — will show in-game');
         const apply = await applyActiveSkinToMinecraft(result.path);
         if (apply.success) toast('Skin applied', 'Your Minecraft skin has been updated');
         else toast('Skin upload failed', apply.error, 'error');
@@ -2037,7 +2037,7 @@ function showUpdateDialog(update) {
     <div class="update-dialog">
       <div class="update-icon"><svg viewBox="0 0 24 24" width="48" height="48"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-2h2v2zm0-4H9V7h2v6z" fill="var(--accent)"/></svg></div>
       <div class="update-title">Update ${update.version} available!</div>
-      <div class="update-msg">Current version: ${update.currentVersion || 'unknown'} â†’ ${update.version}</div>
+      <div class="update-msg">Current version: ${update.currentVersion || 'unknown'} → ${update.version}</div>
       <div class="update-actions">
         <button class="btn btn-secondary" id="btn-update-later">Later</button>
         <button class="btn btn-primary" id="btn-update-now">Update & Restart</button>
@@ -2125,7 +2125,7 @@ async function updatePreflight() {
     const ramLevel = res.ram.value > res.ram.total ? 'bad' : res.ram.value > res.ram.total * 0.75 ? 'warn' : '';
     set('pf-ram', `RAM ${res.ram.value} / ${res.ram.total} GB`, ramLevel);
     if (res.mods.enabled || res.mods.disabled) {
-      const off = res.mods.disabled ? ` Â· ${res.mods.disabled} off` : '';
+      const off = res.mods.disabled ? ` · ${res.mods.disabled} off` : '';
       set('pf-mods', `${res.mods.enabled} mods${off}`, res.mods.disabled ? 'warn' : '');
     } else {
       set('pf-mods', 'No mods', '');
