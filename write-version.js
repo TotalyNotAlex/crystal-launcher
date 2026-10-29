@@ -29,9 +29,14 @@ if (matchMethod === 'exact' && !setupExe.includes(pkg.version)) {
   process.exit(1);
 }
 
+const crypto = require('crypto');
 const buildId = Date.now();
-const manifest = { version: pkg.version, buildId, downloadUrl: setupExe, body: 'New build available' };
-console.log(`Manifest: version=${manifest.version} downloadUrl=${setupExe}`);
+// The installer hash travels with the manifest so the launcher can refuse a
+// tampered or half-downloaded file before executing it.
+const sha256 = crypto.createHash('sha256').update(fs.readFileSync(setupExe)).digest('hex');
+const manifest = { version: pkg.version, buildId, downloadUrl: setupExe, sha256, body: 'New build available' };
+console.log(`Manifest: version=${manifest.version} sha256=${sha256}`);
+console.log(`downloadUrl=${setupExe}`);
 
 const targets = [
   path.join(process.env.APPDATA, 'crystal-launcher', '.crystall'),

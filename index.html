@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Keeps injected HTML (mod names, news, MOTDs) from ever running script.
+       Everything privileged goes through the preload bridge, so the renderer
+       itself needs no remote script, no eval and no inline handlers. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src https://api.modrinth.com https://launchercontent.mojang.com; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Crystal Launcher</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -35,7 +39,7 @@
       <div class="loading-title" data-i18n="app.name">Crystal Launcher</div>
       <div class="loading-status" id="loading-status">Initializing...</div>
       <div class="loading-detail" id="loading-detail"></div>
-      <div class="loading-offline" id="loading-offline" style="display:none;color:var(--text-muted);font-size:11px;margin-top:4px;">No internet connection — limited functionality</div>
+      <div class="loading-offline" id="loading-offline" style="display:none;color:var(--text-muted);font-size:11px;margin-top:4px;">No internet connection â€” limited functionality</div>
     </div>
 
     <div id="toast-container"></div>
@@ -157,10 +161,10 @@
           </div>
 
           <div class="preflight" id="preflight">
-            <span class="pf-item" id="pf-java">Java …</span>
-            <span class="pf-item" id="pf-ram">RAM …</span>
-            <span class="pf-item" id="pf-mods">Mods …</span>
-            <span class="pf-item" id="pf-disk">Disk …</span>
+            <span class="pf-item" id="pf-java">Java â€¦</span>
+            <span class="pf-item" id="pf-ram">RAM â€¦</span>
+            <span class="pf-item" id="pf-mods">Mods â€¦</span>
+            <span class="pf-item" id="pf-disk">Disk â€¦</span>
           </div>
 
           <div class="launch-panel">
@@ -546,6 +550,7 @@
               <div class="toggle-desc" data-i18n="settings.repair_desc">Checks libraries and assets against their hashes and re-downloads anything broken.</div>
               <button class="btn btn-secondary" id="btn-repair" style="font-size:11px;padding:4px 12px;width:fit-content;margin-top:8px;" data-i18n="settings.repair">Repair installation</button>
               <div id="repair-status" style="font-size:11px;color:var(--text-dim);margin-top:6px;"></div>
+              <button class="btn btn-secondary" id="btn-open-log" style="font-size:11px;padding:4px 12px;width:fit-content;margin-top:8px;" data-i18n="settings.open_log">Open launcher log</button>
             </div>
           </div>
         </div>
@@ -637,7 +642,7 @@
           <h2 style="color:var(--text);font-size:20px;font-weight:700;">Welcome to Crystal Launcher</h2>
           <p style="color:var(--text-dim);font-size:13px;margin-top:8px;">Let's get you set up in a few quick steps.</p>
         </div>
-        <button class="btn btn-primary" onclick="showWizardStep(2)" style="width:100%;padding:12px;font-size:14px;">Get Started</button>
+        <button class="btn btn-primary" id="wizard-get-started" style="width:100%;padding:12px;font-size:14px;">Get Started</button>
       </div>
       <div class="wizard-step" id="wizard-step-2" style="display:none;">
         <h3 style="color:var(--text);font-size:16px;font-weight:600;margin-bottom:12px;">1. Add an Account</h3>
@@ -692,7 +697,7 @@
       <div class="modal-actions">
         <button class="btn btn-secondary" id="crash-disable-latest" data-i18n="crash.disable_latest">Disable latest mod &amp; retry</button>
         <button class="btn btn-secondary" id="crash-disable-all" data-i18n="crash.disable_all">Start without mods</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('modal-crash-log').classList.remove('active')" data-i18n="profiles.cancel">Close</button>
+        <button class="btn btn-secondary" data-close="modal-crash-log" data-i18n="profiles.cancel">Close</button>
       </div>
     </div>
   </div>
@@ -702,7 +707,7 @@
     <div class="skin-modal">
       <div class="skin-modal-header">
         <span class="skin-modal-title">Skin Manager</span>
-        <button class="skin-close-btn" onclick="stopSkinViewer();document.getElementById('modal-skin-changer').classList.remove('active')">
+        <button class="skin-close-btn" data-close="modal-skin-changer" data-skin-close="1">
           <svg viewBox="0 0 24 24" width="18" height="18"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/></svg>
         </button>
       </div>

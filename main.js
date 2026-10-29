@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, shell, dialog, Tray, Menu, nativeImage, pro
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
+const crypto = require('crypto');
 const axios = require('axios');
 const { spawn } = require('child_process');
 
@@ -51,6 +52,62 @@ const serversFile = path.join(baseDataDir, 'servers.json');
 const playtimeFile = path.join(baseDataDir, 'playtime.json');
 const javaService = new JavaService(baseDataDir);
 updateService.setManifestPath(path.join(baseDataDir, 'latest-version.json'));
+
+// --- Logging ---------------------------------------------------------------
+// Without a log file every support case is guesswork: the console output of a
+// packaged app goes nowhere. Everything console.* prints also lands on disk.
+const launcherLogDir = path.join(baseDataDir, 'logs');
+const launcherLogFile = path.join(launcherLogDir, 'launcher.log');
+
+function formatLogArg(arg) {
+  if (arg instanceof Error) return arg.stack || arg.message;
+  if (typeof arg === 'object' && arg !== null) {
+    try { return JSON.stringify(arg); } catch { return String(arg); }
+  }
+  return String(arg);
+}
+
+function appendLog(level, args) {
+  try {
+    if (!fs.existsSync(launcherLogDir)) fs.mkdirSync(launcherLogDir, { recursive: true });
+    try {
+      if (fs.statSync(launcherLogFile).size > 2 * 1024 * 1024) {
+        fs.renameSync(launcherLogFile, `${launcherLogFile}.1`);
+      }
+    } catch {}
+    const line = `[${new Date().toISOString()}] [${level}] ${args.map(formatLogArg).join(' ')}\n`;
+    fs.appendFileSync(launcherLogFile, line, 'utf8');
+  } catch {}
+}
+
+for (const level of ['log', 'info', 'warn', 'error']) {
+  const original = console[level].bind(console);
+  console[level] = (...args) => {
+    original(...args);
+    appendLog(level.toUpperCase(), args);
+  };
+}
+
+appendLog('INFO', [`Launcher ${app.getVersion()} starting (packaged=${app.isPackaged}, electron=${process.versions.electron}, node=${process.versions.node})`]);
+appendLog('INFO', [`userData=${app.getPath('userData')}`]);
+
+// Never execute a downloaded installer without checking it against the hash the
+// update source advertised - a tampered manifest or mirror must not lead to code
+// execution.
+function sha256File(file) {
+  try { return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'); }
+  catch { return null; }
+}
+
+function verifyInstallerHash(file, expected) {
+  if (!expected) return { ok: true, skipped: true };
+  const actual = sha256File(file);
+  if (!actual) return { ok: false, error: 'Could not read the downloaded installer' };
+  if (String(actual).toLowerCase() !== String(expected).toLowerCase()) {
+    return { ok: false, error: 'Installer checksum mismatch - download discarded' };
+  }
+  return { ok: true, sha256: actual };
+}
 
 // Write JSON through a temp file + rename, so a crash or a forced quit can
 // never leave a half-written accounts.json / profiles.json / settings.json.
@@ -281,6 +338,12 @@ app.whenReady().then(() => {
                 mainWindow.webContents.send('update-progress', { percent: pct, status: `Pre-downloading update... ${pct}%`, background: true });
               }
             }).then(() => {
+              const autoCheck = verifyInstallerHash(dest, update.sha256);
+              if (!autoCheck.ok) {
+                try { fs.unlinkSync(dest); } catch {}
+                console.error('[update] rejected pre-downloaded installer:', autoCheck.error);
+                return;
+              }
               bgUpdatePath = dest;
               if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.webContents.send('update-progress', { percent: 100, status: 'Update ready — Restart anytime', background: true, ready: true });
@@ -397,6 +460,17 @@ function getDirSize(dir) {
 }
 ipcMain.handle('open-versions-folder', async () => { const f = path.join(baseDataDir, 'game', 'versions'); if (!fs.existsSync(f)) fs.mkdirSync(f, { recursive: true }); shell.openPath(f); return f; });
 ipcMain.handle('open-backups-folder', async () => { const f = path.join(baseDataDir, 'backups'); if (!fs.existsSync(f)) fs.mkdirSync(f, { recursive: true }); shell.openPath(f); return f; });
+ipcMain.handle('open-log-folder', async () => {
+  if (!fs.existsSync(launcherLogDir)) fs.mkdirSync(launcherLogDir, { recursive: true });
+  shell.openPath(launcherLogDir);
+  return launcherLogFile;
+});
+ipcMain.handle('get-log-tail', async (e, lines = 200) => {
+  try {
+    const content = fs.readFileSync(launcherLogFile, 'utf8').split(/\r?\n/);
+    return content.slice(-Math.abs(lines)).join('\n');
+  } catch { return ''; }
+});
 ipcMain.handle('get-resourcepacks-folder', async () => { const f = path.join(baseDataDir, 'game', 'resourcepacks'); if (!fs.existsSync(f)) fs.mkdirSync(f, { recursive: true }); return f; });
 ipcMain.handle('get-shaderpacks-folder', async () => { const f = path.join(baseDataDir, 'game', 'shaderpacks'); if (!fs.existsSync(f)) fs.mkdirSync(f, { recursive: true }); return f; });
 
@@ -420,6 +494,7 @@ ipcMain.handle('open-mods-folder', async (e, id) => { const f = profileService.g
 
 ipcMain.handle('launch-game', async (e, { profileId, accountId, server }) => {
   try {
+    console.log(`[launch] requested (profile=${profileId}, account=${accountId})`);
     const settings = getSavedSettings();
     const profiles = profileService.getProfiles();
     const profile = profiles.find((p) => p.id === profileId) || profiles[0];
@@ -499,7 +574,10 @@ ipcMain.handle('launch-game', async (e, { profileId, accountId, server }) => {
       }
     }
     return { success: true, result };
-  } catch (err) { return { success: false, error: err.message }; }
+  } catch (err) {
+    console.error('[launch] failed:', err && err.stack ? err.stack : err);
+    return { success: false, error: err.message };
+  }
 });
 
 function getPlaytimeSessions() {
@@ -663,12 +741,17 @@ ipcMain.handle('get-previous-release', async () => {
     return {
       success: true,
       currentVersion: current,
-      release: { version: older.version, downloadUrl: installer.browser_download_url, notes: older.body || '' },
+      release: {
+        version: older.version,
+        downloadUrl: installer.browser_download_url,
+        sha256: String(installer.digest || '').startsWith('sha256:') ? String(installer.digest).slice(7) : '',
+        notes: older.body || '',
+      },
     };
   } catch (err) { return { success: false, error: err.message }; }
 });
 
-ipcMain.handle('install-release', async (e, { downloadUrl, version }) => {
+ipcMain.handle('install-release', async (e, { downloadUrl, version, sha256 }) => {
   try {
     if (!downloadUrl) return { success: false, error: 'No download URL' };
     const dest = path.join(baseDataDir, 'rollback_setup.exe');
@@ -677,6 +760,12 @@ ipcMain.handle('install-release', async (e, { downloadUrl, version }) => {
     await updateService.downloadUpdate(downloadUrl, dest, (pct) => {
       e.sender.send('update-progress', { percent: pct, status: `Downloading... ${pct}%` });
     });
+    const rollbackCheck = verifyInstallerHash(dest, sha256);
+    if (!rollbackCheck.ok) {
+      try { fs.unlinkSync(dest); } catch {}
+      console.error('[update] rejected rollback installer:', rollbackCheck.error);
+      return { success: false, error: rollbackCheck.error };
+    }
     fs.writeFileSync(path.join(baseDataDir, '.updated'), '1');
     spawn(dest, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     setTimeout(() => { mainWindow?.destroy(); app.quit(); }, 4000);
@@ -1069,6 +1158,12 @@ ipcMain.handle('download-update', async (e, downloadUrl) => {
       e.sender.send('update-progress', { percent: pct, status: `Downloading... ${pct}%` });
     });
     e.sender.send('update-progress', { percent: 100, status: 'Download complete' });
+    const check = verifyInstallerHash(dest, update && update.sha256);
+    if (!check.ok) {
+      try { fs.unlinkSync(dest); } catch {}
+      console.error('[update] rejected installer:', check.error);
+      return { success: false, error: check.error };
+    }
     fs.writeFileSync(path.join(baseDataDir, '.updated'), '1');
     spawn(dest, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     setTimeout(() => { mainWindow?.destroy(); app.quit(); }, 4000);
@@ -1524,6 +1619,12 @@ ipcMain.handle('download-update-bg', async (e, downloadUrl) => {
     await updateService.downloadUpdate(downloadUrl, dest, (pct) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', { percent: pct, status: `Downloading update... ${pct}%`, background: true });
     });
+    const bgCheck = verifyInstallerHash(dest, update && update.sha256);
+    if (!bgCheck.ok) {
+      try { fs.unlinkSync(dest); } catch {}
+      console.error('[update] rejected background installer:', bgCheck.error);
+      return { success: false, error: bgCheck.error };
+    }
     bgUpdatePath = dest;
     fs.writeFileSync(path.join(baseDataDir, '.updated'), '1');
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', { percent: 100, status: 'Update ready', background: true, ready: true });
@@ -1541,6 +1642,12 @@ ipcMain.handle('install-bg-update', async () => {
       return { success: false, error: `Wrong installer for ${target}` };
     }
     // Prefer validating against the source we downloaded from
+    const installCheck = verifyInstallerHash(dest, update && update.sha256);
+    if (!installCheck.ok) {
+      try { fs.unlinkSync(dest); } catch {}
+      console.error('[update] refusing to run installer:', installCheck.error);
+      return { success: false, error: installCheck.error };
+    }
     spawn(dest, ['/S', '/currentuser', '/R'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     setTimeout(() => { app.quit(); }, 1500);
     return { success: true };

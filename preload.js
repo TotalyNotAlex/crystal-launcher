@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('api', {
   openGameFolder: () => ipcRenderer.invoke('open-game-folder'),
   openVersionsFolder: () => ipcRenderer.invoke('open-versions-folder'),
   openBackupsFolder: () => ipcRenderer.invoke('open-backups-folder'),
+  openLogFolder: () => ipcRenderer.invoke('open-log-folder'),
+  getLogTail: (lines) => ipcRenderer.invoke('get-log-tail', lines),
 
   getVersions: () => ipcRenderer.invoke('get-versions'),
 
@@ -49,7 +51,7 @@ contextBridge.exposeInMainWorld('api', {
   repairInstallation: (profileId) => ipcRenderer.invoke('repair-installation', { profileId }),
   onRepairProgress: (cb) => ipcRenderer.on('repair-progress', (e, d) => cb(d)),
   getPreviousRelease: () => ipcRenderer.invoke('get-previous-release'),
-  installRelease: (downloadUrl, version) => ipcRenderer.invoke('install-release', { downloadUrl, version }),
+  installRelease: (downloadUrl, version, sha256) => ipcRenderer.invoke('install-release', { downloadUrl, version, sha256 }),
 
   getNews: () => ipcRenderer.invoke('get-news'),
 

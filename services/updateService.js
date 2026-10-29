@@ -11,10 +11,17 @@ let manifestPath = '';
 class UpdateService {
   setManifestPath(p) { manifestPath = p; }
 
+  readJsonFile(file) {
+    // Files written by other tools (or PowerShell) may carry a UTF-8 BOM,
+    // which JSON.parse rejects - strip it before parsing.
+    const raw = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
+    return JSON.parse(raw);
+  }
+
   async checkForUpdates() {
     try {
       if (manifestPath && fs.existsSync(manifestPath)) {
-        const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        const m = this.readJsonFile(manifestPath);
         if (m.version && this.compareVersions(m.version, CURRENT_VERSION) > 0) {
           let downloadUrl = m.downloadUrl || '';
           // Reject a local installer that does not match the advertised version
@@ -30,6 +37,7 @@ class UpdateService {
             currentVersion: CURRENT_VERSION,
             url: '',
             downloadUrl,
+            sha256: m.sha256 || '',
             body: m.body || '',
             buildId: m.buildId || 0,
           };
@@ -43,16 +51,24 @@ class UpdateService {
       });
       const tag = res.data.tag_name || res.data.name || '';
       const version = tag.replace(/^v/, '');
-      const downloadUrl = res.data.assets?.[0]?.browser_download_url || '';
+      const assets = Array.isArray(res.data.assets) ? res.data.assets : [];
+      // Prefer the setup installer, not whatever asset happens to be first.
+      const asset = assets.find((a) => /\.exe$/i.test(a.name) && /setup/i.test(a.name))
+        || assets.find((a) => /\.exe$/i.test(a.name))
+        || assets[0];
+      const downloadUrl = asset?.browser_download_url || '';
       // Never install an asset whose filename does not match the release version
-      const assetName = res.data.assets?.[0]?.name || '';
+      const assetName = asset?.name || '';
       const versionOk = !assetName || assetName.toLowerCase().includes(String(version).toLowerCase()) || !assetName.includes('Setup');
+      const digest = String(asset?.digest || '');
+      const sha256 = digest.startsWith('sha256:') ? digest.slice('sha256:'.length) : '';
       return {
         hasUpdate: this.compareVersions(version, CURRENT_VERSION) > 0,
         version,
         currentVersion: CURRENT_VERSION,
         url: res.data.html_url,
         downloadUrl: versionOk ? downloadUrl : '',
+        sha256,
         body: res.data.body || '',
       };
     } catch (err) {

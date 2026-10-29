@@ -3,6 +3,23 @@ let currentLang = 'en';
 let newsCache = null;
 let worldsCache = null;
 
+// Mod names, descriptions, news and MOTDs come from the internet and end up in
+// innerHTML templates - always escape them so markup in a mod name stays text.
+function esc(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Broken remote icons should disappear instead of leaving a torn image behind.
+document.addEventListener('error', (event) => {
+  const target = event.target;
+  if (target && target.tagName === 'IMG') target.style.display = 'none';
+}, true);
+
 function t(key, params) {
   let text = translations[key];
   if (text === undefined) text = key;
@@ -260,13 +277,13 @@ async function searchMods() {
     const icon = mod.icon_url || '';
     const downloads = mod.downloads ? (mod.downloads >= 1000000 ? (mod.downloads / 1000000).toFixed(1) + 'M' : mod.downloads >= 1000 ? (mod.downloads / 1000).toFixed(1) + 'K' : mod.downloads) : '0';
     card.innerHTML = `
-      <img class="mod-card-icon" src="${icon}" alt="" onerror="this.style.display='none'">
+      <img class="mod-card-icon" src="${icon}" alt="">
       <div class="mod-card-info">
-        <div class="mod-card-title">${mod.title || mod.slug}</div>
-        <div class="mod-card-desc">${(mod.description || '').substring(0, 80)}${mod.description && mod.description.length > 80 ? '...' : ''}</div>
-        <div class="mod-card-meta">${mod.author || 'Unknown'} &bull; ${downloads} ${t('mods.downloads')}</div>
+        <div class="mod-card-title">${esc(mod.title || mod.slug)}</div>
+        <div class="mod-card-desc">${esc((mod.description || '').substring(0, 80))}${mod.description && mod.description.length > 80 ? '...' : ''}</div>
+        <div class="mod-card-meta">${esc(mod.author || 'Unknown')} &bull; ${downloads} ${t('mods.downloads')}</div>
       </div>
-      <button class="btn btn-primary mod-install-btn" data-slug="${mod.slug}" data-title="${mod.title || mod.slug}">Install</button>
+      <button class="btn btn-primary mod-install-btn" data-slug="${esc(mod.slug)}" data-title="${esc(mod.title || mod.slug)}">Install</button>
     `;
     card.querySelector('.mod-install-btn').onclick = (e) => {
       e.stopPropagation();
@@ -308,13 +325,13 @@ async function searchModpacks() {
     const icon = mp.icon_url || '';
     const downloads = mp.downloads ? (mp.downloads >= 1000000 ? (mp.downloads / 1000000).toFixed(1) + 'M' : mp.downloads >= 1000 ? (mp.downloads / 1000).toFixed(1) + 'K' : mp.downloads) : '0';
     card.innerHTML = `
-      <img class="mod-card-icon" src="${icon}" alt="" onerror="this.style.display='none'">
+      <img class="mod-card-icon" src="${icon}" alt="">
       <div class="mod-card-info">
-        <div class="mod-card-title">${mp.title || mp.slug}</div>
-        <div class="mod-card-desc">${(mp.description || '').substring(0, 80)}${mp.description && mp.description.length > 80 ? '...' : ''}</div>
-        <div class="mod-card-meta">${mp.author || 'Unknown'} &bull; ${downloads} ${t('mods.downloads')}</div>
+        <div class="mod-card-title">${esc(mp.title || mp.slug)}</div>
+        <div class="mod-card-desc">${esc((mp.description || '').substring(0, 80))}${mp.description && mp.description.length > 80 ? '...' : ''}</div>
+        <div class="mod-card-meta">${esc(mp.author || 'Unknown')} &bull; ${downloads} ${t('mods.downloads')}</div>
       </div>
-      <button class="btn btn-primary mod-install-btn" data-slug="${mp.slug}" data-title="${mp.title || mp.slug}">Install</button>
+      <button class="btn btn-primary mod-install-btn" data-slug="${esc(mp.slug)}" data-title="${esc(mp.title || mp.slug)}">Install</button>
     `;
     card.querySelector('.mod-install-btn').onclick = (e) => {
       e.stopPropagation();
@@ -449,11 +466,11 @@ async function searchCurseforge() {
     card.className = 'mod-card';
     const downloads = mod.downloads >= 1000000 ? (mod.downloads / 1000000).toFixed(1) + 'M' : mod.downloads >= 1000 ? (mod.downloads / 1000).toFixed(1) + 'K' : (mod.downloads || '0');
     card.innerHTML = `
-      <img class="mod-card-icon" src="${mod.iconUrl || ''}" alt="" onerror="this.style.display='none'">
+      <img class="mod-card-icon" src="${mod.iconUrl || ''}" alt="">
       <div class="mod-card-info">
-        <div class="mod-card-title">${mod.name}</div>
-        <div class="mod-card-desc">${(mod.description || '').substring(0, 80)}${mod.description && mod.description.length > 80 ? '...' : ''}</div>
-        <div class="mod-card-meta">${mod.author || 'Unknown'} &bull; ${downloads} ${t('mods.downloads')}</div>
+        <div class="mod-card-title">${esc(mod.name)}</div>
+        <div class="mod-card-desc">${esc((mod.description || '').substring(0, 80))}${mod.description && mod.description.length > 80 ? '...' : ''}</div>
+        <div class="mod-card-meta">${esc(mod.author || 'Unknown')} &bull; ${downloads} ${t('mods.downloads')}</div>
       </div>
       <button class="btn btn-primary mod-install-btn">${t('mods.install')}</button>
     `;
@@ -468,7 +485,7 @@ async function openCurseforgeInstall(mod) {
 
   $('modal-mod-title').textContent = mod.name;
   $('modal-mod-desc').textContent = t('mods.loading');
-  $('modal-mod-author').textContent = `${t('mods.by')} ${mod.author || 'Unknown'}`;
+  $('modal-mod-author').textContent = `${t('mods.by')} ${esc(mod.author || 'Unknown')}`;
   $('modal-mod-icon').src = mod.iconUrl || '';
   $('modal-install-btn').textContent = t('mods.install');
   $('modal-install-btn').disabled = true;
@@ -539,11 +556,11 @@ async function searchResourcepacks() {
     const icon = mod.icon_url || '';
     const downloads = mod.downloads >= 1000000 ? (mod.downloads / 1000000).toFixed(1) + 'M' : mod.downloads >= 1000 ? (mod.downloads / 1000).toFixed(1) + 'K' : (mod.downloads || '0');
     card.innerHTML = `
-      <img class="mod-card-icon" src="${icon}" alt="" onerror="this.style.display='none'">
+      <img class="mod-card-icon" src="${icon}" alt="">
       <div class="mod-card-info">
-        <div class="mod-card-title">${mod.title || mod.slug}</div>
-        <div class="mod-card-desc">${(mod.description || '').substring(0, 80)}${mod.description && mod.description.length > 80 ? '...' : ''}</div>
-        <div class="mod-card-meta">${mod.author || 'Unknown'} &bull; ${downloads} ${t('mods.downloads')}</div>
+        <div class="mod-card-title">${esc(mod.title || mod.slug)}</div>
+        <div class="mod-card-desc">${esc((mod.description || '').substring(0, 80))}${mod.description && mod.description.length > 80 ? '...' : ''}</div>
+        <div class="mod-card-meta">${esc(mod.author || 'Unknown')} &bull; ${downloads} ${t('mods.downloads')}</div>
       </div>
       <button class="btn btn-primary mod-install-btn">${t('mods.install')}</button>
     `;
@@ -577,11 +594,11 @@ async function searchShaders() {
     const icon = mod.icon_url || '';
     const downloads = mod.downloads >= 1000000 ? (mod.downloads / 1000000).toFixed(1) + 'M' : mod.downloads >= 1000 ? (mod.downloads / 1000).toFixed(1) + 'K' : (mod.downloads || '0');
     card.innerHTML = `
-      <img class="mod-card-icon" src="${icon}" alt="" onerror="this.style.display='none'">
+      <img class="mod-card-icon" src="${icon}" alt="">
       <div class="mod-card-info">
-        <div class="mod-card-title">${mod.title || mod.slug}</div>
-        <div class="mod-card-desc">${(mod.description || '').substring(0, 80)}${mod.description && mod.description.length > 80 ? '...' : ''}</div>
-        <div class="mod-card-meta">${mod.author || 'Unknown'} &bull; ${downloads} ${t('mods.downloads')}</div>
+        <div class="mod-card-title">${esc(mod.title || mod.slug)}</div>
+        <div class="mod-card-desc">${esc((mod.description || '').substring(0, 80))}${mod.description && mod.description.length > 80 ? '...' : ''}</div>
+        <div class="mod-card-meta">${esc(mod.author || 'Unknown')} &bull; ${downloads} ${t('mods.downloads')}</div>
       </div>
       <button class="btn btn-primary mod-install-btn">${t('mods.install')}</button>
     `;
@@ -593,7 +610,7 @@ async function searchShaders() {
 async function openPackInstall(mod, type) {
   $('modal-mod-title').textContent = mod.title || mod.slug;
   $('modal-mod-desc').textContent = t('mods.loading');
-  $('modal-mod-author').textContent = `${t('mods.by')} ${mod.author || 'Unknown'}`;
+  $('modal-mod-author').textContent = `${t('mods.by')} ${esc(mod.author || 'Unknown')}`;
   $('modal-mod-icon').src = mod.icon_url || '';
   $('modal-install-btn').textContent = t('mods.install');
   $('modal-install-btn').disabled = true;
@@ -691,7 +708,7 @@ function updateProfiles() {
   profiles.forEach((p) => {
     const card = document.createElement('div');
     card.className = `profile-card ${p.id === activeProfileId ? 'selected' : ''}`;
-    card.innerHTML = `<div><div class="card-name">${p.name}</div><div class="card-meta">MC ${p.mcVersion} &bull; ${p.ram || currentRam}GB</div></div><div class="card-bottom"><span class="loader-tag">${p.loaderType}</span><div class="card-actions"><button class="btn btn-secondary card-backup-btn" style="padding:3px 8px;font-size:10px;" title="Backup">${t('profiles.backup') || 'Backup'}</button><button class="btn btn-secondary" style="padding:3px 8px;font-size:10px;color:var(--danger);">${t('profiles.delete')}</button></div></div>`;
+    card.innerHTML = `<div><div class="card-name">${esc(p.name)}</div><div class="card-meta">MC ${p.mcVersion} &bull; ${p.ram || currentRam}GB</div></div><div class="card-bottom"><span class="loader-tag">${p.loaderType}</span><div class="card-actions"><button class="btn btn-secondary card-backup-btn" style="padding:3px 8px;font-size:10px;" title="Backup">${t('profiles.backup') || 'Backup'}</button><button class="btn btn-secondary" style="padding:3px 8px;font-size:10px;color:var(--danger);">${t('profiles.delete')}</button></div></div>`;
     card.querySelector('.card-backup-btn').onclick = async (e) => {
       e.stopPropagation();
       const result = await window.api.backupProfile(p.id);
@@ -734,12 +751,12 @@ async function loadMods(pid) {
     const sorted = sortMods(mods, modSortBy);
     list.innerHTML = '';
     if (!sorted.length) {
-      list.innerHTML = `<div class="mod-empty drag-target">${t('profiles.no_mods')} — Drop .jar files here</div>`;
+      list.innerHTML = `<div class="mod-empty drag-target">${t('profiles.no_mods')} â€” Drop .jar files here</div>`;
     }
     sorted.forEach((m) => {
       const el = document.createElement('div');
       el.className = 'mod-item';
-      el.innerHTML = `<span class="mod-name">${m.name}</span><span class="mod-size" style="color:var(--text-muted);font-size:10px;margin-right:auto;margin-left:8px;">${(m.size / 1024).toFixed(0)} KB</span><label class="toggle"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span class="toggle-slider"></span></label>`;
+      el.innerHTML = `<span class="mod-name">${esc(m.name)}</span><span class="mod-size" style="color:var(--text-muted);font-size:10px;margin-right:auto;margin-left:8px;">${(m.size / 1024).toFixed(0)} KB</span><label class="toggle"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span class="toggle-slider"></span></label>`;
       el.querySelector('input').onchange = async function () { await window.api.toggleMod(pid, m.fileName, this.checked); loadMods(pid); };
       list.appendChild(el);
     });
@@ -964,14 +981,14 @@ async function updateNews(force) {
       const imgUrl = e.image?.url ? `${newsBase}${e.image.url}` : (typeof e.image === 'string' ? `${newsBase}${e.image}` : '');
       const versionTag = version ? `<span class="news-version">${version}</span>` : '';
       const imgHtml = imgUrl
-        ? `<img class="news-image" src="${imgUrl}" alt="" onerror="this.style.display='none'">`
+        ? `<img class="news-image" src="${imgUrl}" alt="">`
         : `<div class="news-image news-image-fallback"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>`;
       card.innerHTML = `
         ${imgHtml}
         <div class="news-info">
-          <div class="news-title">${title}</div>
+          <div class="news-title">${esc(title)}</div>
           <div class="news-date"><span>${date}</span>${versionTag}</div>
-          <div class="news-text">${text.substring(0, 200)}${text.length > 200 ? '...' : ''}</div>
+          <div class="news-text">${esc(text.substring(0, 200))}${text.length > 200 ? '...' : ''}</div>
         </div>
       `;
       list.appendChild(card);
@@ -1025,8 +1042,8 @@ async function updateServers() {
       card.innerHTML = `
         <div class="server-icon"><svg viewBox="0 0 24 24"><path d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H4v-2h7v2zm9 0h-7v-2h7v2z"/></svg></div>
         <div class="server-info">
-          <div class="server-name">${s.name}</div>
-          <div class="server-address">${s.address}:${s.port} <span class="server-status" style="color:var(--text-muted);font-size:10px;"></span></div>
+          <div class="server-name">${esc(s.name)}</div>
+          <div class="server-address">${esc(s.address)}:${esc(s.port)} <span class="server-status" style="color:var(--text-muted);font-size:10px;"></span></div>
           <div class="server-motd" style="font-size:11px;color:var(--text-dim);display:none;"></div>
         </div>
         <div class="server-actions">
@@ -1055,7 +1072,7 @@ async function updateServers() {
         if (!statusEl) return;
         if (ping && ping.online) {
           const players = ping.players ? `${ping.players.online}/${ping.players.max}` : '';
-          statusEl.innerHTML = `<span style="color:var(--success)">&#9679;</span> Online${players ? ` — ${players}` : ''}${typeof ping.latency === 'number' ? ` (${ping.latency}ms)` : ''}`;
+          statusEl.innerHTML = `<span style="color:var(--success)">&#9679;</span> Online${players ? ` â€” ${players}` : ''}${typeof ping.latency === 'number' ? ` (${ping.latency}ms)` : ''}`;
           if (motdEl && ping.motd) { motdEl.style.display = 'block'; motdEl.textContent = ping.motd; }
         } else {
           statusEl.innerHTML = `<span style="color:var(--danger)">&#9679;</span> Offline`;
@@ -1156,7 +1173,7 @@ $('btn-console-tab-crashes').onclick = async function () {
       const card = document.createElement('div');
       card.className = 'crash-card';
       const date = new Date(log.time).toLocaleString();
-      card.innerHTML = `<div class="crash-header"><span class="crash-name">${log.name}</span><span class="crash-date">${date}</span></div><div class="crash-analysis" style="display:none;font-size:12px;color:var(--text-dim);padding:8px 10px;background:var(--bg-deep);border-radius:var(--radius-sm);margin-bottom:6px;"></div><pre class="crash-content">${log.content.substring(0, 500)}...</pre>`;
+      card.innerHTML = `<div class="crash-header"><span class="crash-name">${esc(log.name)}</span><span class="crash-date">${date}</span></div><div class="crash-analysis" style="display:none;font-size:12px;color:var(--text-dim);padding:8px 10px;background:var(--bg-deep);border-radius:var(--radius-sm);margin-bottom:6px;"></div><pre class="crash-content">${esc(log.content.substring(0, 500))}...</pre>`;
       card.onclick = () => {
         const expanded = card.classList.toggle('expanded');
         card.querySelector('.crash-content').textContent = expanded ? log.content : log.content.substring(0, 500) + '...';
@@ -1165,7 +1182,7 @@ $('btn-console-tab-crashes').onclick = async function () {
             const box = card.querySelector('.crash-analysis');
             if (!box || !analysis) return;
             box.style.display = 'block';
-            box.innerHTML = `<strong style="color:var(--text);">${analysis.title || 'Crash analysis'}</strong><div style="margin-top:4px;">${analysis.summary || ''}</div>${Array.isArray(analysis.hints) && analysis.hints.length ? `<ul style="margin:6px 0 0 16px;padding:0;">${analysis.hints.map((h) => `<li>${h}</li>`).join('')}</ul>` : ''}`;
+            box.innerHTML = `<strong style="color:var(--text);">${esc(analysis.title || 'Crash analysis')}</strong><div style="margin-top:4px;">${esc(analysis.summary || '')}</div>${Array.isArray(analysis.hints) && analysis.hints.length ? `<ul style="margin:6px 0 0 16px;padding:0;">${analysis.hints.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}`;
           }).catch(() => {});
         }
       };
@@ -1181,11 +1198,11 @@ function showJavaStatus(java) {
   if (java && java.found) {
     el.innerHTML = `<span style="color:var(--success)">&#9679;</span> ${t('settings.java_found', { version: java.version })} (64-bit)`;
   } else if (java && java.version) {
-    el.innerHTML = `<span style="color:var(--danger)">&#9679;</span> Java ${java.version} found but Java 21+ is required${java.reason ? ` — ${java.reason}` : ''} <button class="btn btn-secondary" id="java-install-btn-dyn" style="font-size:10px;padding:2px 8px;margin-left:6px;">Install Java 21</button>`;
+    el.innerHTML = `<span style="color:var(--danger)">&#9679;</span> Java ${java.version} found but Java 21+ is required${java.reason ? ` â€” ${java.reason}` : ''} <button class="btn btn-secondary" id="java-install-btn-dyn" style="font-size:10px;padding:2px 8px;margin-left:6px;">Install Java 21</button>`;
     const dyn = document.getElementById('java-install-btn-dyn');
     if (dyn) dyn.onclick = () => $('java-install-btn')?.click();
   } else {
-    el.innerHTML = `<span style="color:var(--danger)">&#9679;</span> ${t('settings.java_not_found')} — Java 21+ will be downloaded on Play`;
+    el.innerHTML = `<span style="color:var(--danger)">&#9679;</span> ${t('settings.java_not_found')} â€” Java 21+ will be downloaded on Play`;
   }
 }
 
@@ -1212,7 +1229,7 @@ function initSettings() {
   $('btn-browse-screenshots')?.addEventListener('click', async () => {
     const shots = await window.api.listScreenshots();
     if (!shots.length) { toast(t('screenshots.none'), ''); return; }
-    toast(t('screenshots.title'), `${shots.length} screenshot(s) — opening folder`);
+    toast(t('screenshots.title'), `${shots.length} screenshot(s) â€” opening folder`);
     window.api.openScreenshotsFolder();
   });
   const javaPathInput = $('input-java-path');
@@ -1321,8 +1338,8 @@ $('btn-play').onclick = async function () {
       const javaCheck = await window.api.checkJava();
       if (!javaCheck.found) {
         pcText.textContent = javaCheck.needsInstall && javaCheck.version
-          ? `Java ${javaCheck.version} is too old — downloading Java 21...`
-          : 'Java 21 not found — downloading...';
+          ? `Java ${javaCheck.version} is too old â€” downloading Java 21...`
+          : 'Java 21 not found â€” downloading...';
         const installResult = await window.api.installJava();
         if (!installResult.success) {
           throw new Error(installResult.error || 'Java 21 download failed');
@@ -1341,6 +1358,7 @@ $('btn-play').onclick = async function () {
   }
 
   pcText.textContent = 'Launching...';
+  const launchStartedAt = Date.now();
   const result = await window.api.launchGame(launchProfile.id, activeAccountId);
   if (result.success) {
     pcText.textContent = t('play.running');
@@ -1349,9 +1367,9 @@ $('btn-play').onclick = async function () {
     setTimeout(() => { this.disabled = false; this.textContent = t('play.btn'); pc.classList.remove('active'); }, 3000);
   } else {
     let msg = result.error || t('toast.error');
-    if (msg.includes('Java not found') || msg.includes('Java 21')) msg += ' — will retry download in Settings > Java Runtime';
+    if (msg.includes('Java not found') || msg.includes('Java 21')) msg += ' â€” will retry download in Settings > Java Runtime';
     toast(t('play.error'), msg, 'error');
-    pcText.textContent = result.needsLogin ? 'Sign in again' : 'Launch failed';
+    pcText.textContent = result.needsLogin ? t('play.sign_in_again') : 'Launch failed';
     this.disabled = false; this.textContent = t('play.btn');
     setTimeout(() => pc.classList.remove('active'), 1000);
     if (result.needsLogin) {
@@ -1360,13 +1378,14 @@ $('btn-play').onclick = async function () {
       document.querySelector('.nav-item[data-view="accounts"]')?.click();
       return;
     }
+    // Only open a crash report that was written after this launch attempt -
+    // otherwise an old report is shown and points at the wrong problem.
     window.api.getCrashLogs().then((logs) => {
-      if (logs.length) {
-        const latest = logs[0];
-        $('crash-log-name').textContent = latest.name;
-        $('crash-log-content').textContent = latest.content;
-        $('modal-crash-log').classList.add('active');
-      }
+      const fresh = (logs || []).find((log) => log.time > launchStartedAt);
+      if (!fresh) return;
+      $('crash-log-name').textContent = fresh.name;
+      $('crash-log-content').textContent = fresh.content;
+      $('modal-crash-log').classList.add('active');
     });
   }
 };
@@ -1514,14 +1533,14 @@ function renderInstalledMods() {
   const sorted = sortMods(installedModsCache, modSortBy);
   list.innerHTML = '';
   if (!sorted.length) {
-    list.innerHTML = `<div class="mod-empty drag-target">${t('profiles.no_mods')} — Drop .jar files here</div>`;
+    list.innerHTML = `<div class="mod-empty drag-target">${t('profiles.no_mods')} â€” Drop .jar files here</div>`;
     return;
   }
   sorted.forEach((m) => {
     const el = document.createElement('div');
     el.className = 'mod-item';
     const hasUpdate = m._hasUpdate;
-    el.innerHTML = `<span class="mod-name">${m.name}</span>${hasUpdate ? '<span class="mod-update-badge">Update</span>' : ''}<span class="mod-size" style="color:var(--text-muted);font-size:10px;margin-left:auto;margin-right:8px;">${(m.size / 1024).toFixed(0)} KB</span><label class="toggle"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span class="toggle-slider"></span></label>`;
+    el.innerHTML = `<span class="mod-name">${esc(m.name)}</span>${hasUpdate ? '<span class="mod-update-badge">Update</span>' : ''}<span class="mod-size" style="color:var(--text-muted);font-size:10px;margin-left:auto;margin-right:8px;">${(m.size / 1024).toFixed(0)} KB</span><label class="toggle"><input type="checkbox" ${m.enabled ? 'checked' : ''}><span class="toggle-slider"></span></label>`;
     el.querySelector('input').onchange = async function () { await window.api.toggleMod(pid, m.fileName, this.checked); refreshInstalledMods(); };
     list.appendChild(el);
   });
@@ -1628,7 +1647,7 @@ async function init() {
       }, 800);
     } else {
       loadingStatus.textContent = java.needsInstall && java.version
-        ? `Java ${java.version} is too old — downloading Java 21...`
+        ? `Java ${java.version} is too old â€” downloading Java 21...`
         : 'Downloading Java 21...';
       $('loading-detail').textContent = 'This may take a moment';
       const javaProgress = document.createElement('div');
@@ -1779,7 +1798,7 @@ function renderSkinList() {
   if (typeEl) {
     typeEl.textContent = activeAccount?.type === 'microsoft'
       ? 'Changes apply directly to your official Minecraft account via Minecraft API'
-      : 'Skins saved locally — use a skin mod to apply in offline mode';
+      : 'Skins saved locally â€” use a skin mod to apply in offline mode';
   }
   list.innerHTML = '';
 
@@ -1793,7 +1812,7 @@ function renderSkinList() {
     if (activeAccount?.type === 'microsoft') {
       toast('Resetting skin...', 'Applying default via Minecraft API');
       const apply = await applyActiveSkinToMinecraft('default');
-      if (apply.success) toast('Skin reset', 'Default skin applied — shows in Minecraft immediately');
+      if (apply.success) toast('Skin reset', 'Default skin applied â€” shows in Minecraft immediately');
       else toast('Reset failed', apply.error, 'error');
     }
   };
@@ -1860,7 +1879,7 @@ $('skin-reset-btn').onclick = async () => {
   if (active?.type === 'microsoft') {
     toast('Resetting skin...', 'Applying default via Mojang API');
     const apply = await applyActiveSkinToMinecraft('default');
-    if (apply.success) toast('Skin reset', 'Default skin applied — shows in Minecraft immediately');
+    if (apply.success) toast('Skin reset', 'Default skin applied â€” shows in Minecraft immediately');
     else toast('Reset failed', apply.error, 'error');
   }
 };
@@ -1883,7 +1902,7 @@ $('skin-file-input').onchange = async function () {
       saveSettings();
       const active = accounts.find((a) => a.id === activeAccountId);
       if (active?.type === 'microsoft') {
-        toast('Applying skin...', 'Uploading to Minecraft API — will show in-game');
+        toast('Applying skin...', 'Uploading to Minecraft API â€” will show in-game');
         const apply = await applyActiveSkinToMinecraft(result.path);
         if (apply.success) toast('Skin applied', 'Your Minecraft skin has been updated');
         else toast('Skin upload failed', apply.error, 'error');
@@ -2018,7 +2037,7 @@ function showUpdateDialog(update) {
     <div class="update-dialog">
       <div class="update-icon"><svg viewBox="0 0 24 24" width="48" height="48"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15H9v-2h2v2zm0-4H9V7h2v6z" fill="var(--accent)"/></svg></div>
       <div class="update-title">Update ${update.version} available!</div>
-      <div class="update-msg">Current version: ${update.currentVersion || 'unknown'} → ${update.version}</div>
+      <div class="update-msg">Current version: ${update.currentVersion || 'unknown'} â†’ ${update.version}</div>
       <div class="update-actions">
         <button class="btn btn-secondary" id="btn-update-later">Later</button>
         <button class="btn btn-primary" id="btn-update-now">Update & Restart</button>
@@ -2106,7 +2125,7 @@ async function updatePreflight() {
     const ramLevel = res.ram.value > res.ram.total ? 'bad' : res.ram.value > res.ram.total * 0.75 ? 'warn' : '';
     set('pf-ram', `RAM ${res.ram.value} / ${res.ram.total} GB`, ramLevel);
     if (res.mods.enabled || res.mods.disabled) {
-      const off = res.mods.disabled ? ` · ${res.mods.disabled} off` : '';
+      const off = res.mods.disabled ? ` Â· ${res.mods.disabled} off` : '';
       set('pf-mods', `${res.mods.enabled} mods${off}`, res.mods.disabled ? 'warn' : '');
     } else {
       set('pf-mods', 'No mods', '');
@@ -2130,27 +2149,27 @@ if (repairBtn) {
     const status = $('repair-status');
     if (!status || !p) return;
     status.textContent = p.phase === 'check'
-      ? `Checking files... ${p.current} / ${p.total}`
-      : `Downloading repairs... ${p.current} / ${p.total}`;
+      ? t('settings.repair_progress_check', { current: p.current, total: p.total })
+      : t('settings.repair_progress_download', { current: p.current, total: p.total });
   });
   repairBtn.onclick = async () => {
     if (repairRunning) return;
     repairRunning = true;
     repairBtn.disabled = true;
     const status = $('repair-status');
-    if (status) status.textContent = 'Checking libraries and assets...';
+    if (status) status.textContent = t('settings.checking_files');
     try {
       const res = await window.api.repairInstallation(activeProfileId);
       const el = $('repair-status');
       if (!res || !res.success) {
-        if (el) el.textContent = (res && res.error) || 'Repair failed';
+        if (el) el.textContent = (res && res.error) || t('settings.repair_failed');
       } else if (!res.checked) {
-        if (el) el.textContent = 'Nothing to check.';
+        if (el) el.textContent = t('settings.repair_nothing');
       } else if (!res.broken) {
-        if (el) el.textContent = `All ${res.checked} files are intact.`;
+        if (el) el.textContent = t('settings.repair_ok', { checked: res.checked });
       } else {
-        const failed = res.failed ? ` ${res.failed} could not be repaired.` : '';
-        if (el) el.textContent = `Repaired ${res.repaired} of ${res.broken} broken files (${res.checked} checked).${failed}`;
+        const failed = res.failed ? t('settings.repair_failed_some', { failed: res.failed }) : '';
+        if (el) el.textContent = t('settings.repair_result', { repaired: res.repaired, broken: res.broken, checked: res.checked }) + failed;
       }
       updatePreflight();
     } catch (err) {
@@ -2163,6 +2182,8 @@ if (repairBtn) {
   };
 }
 
+const openLogBtn = $('btn-open-log');
+if (openLogBtn) openLogBtn.onclick = () => window.api.openLogFolder();
 // ---------------------------------------------------------------------------
 // Crash recovery: disable the newest mod, or all of them, then retry
 // ---------------------------------------------------------------------------
@@ -2172,11 +2193,11 @@ if (repairBtn) {
     btn.disabled = true;
     try {
       const res = await window.api.crashRecovery(activeProfileId, action);
-      if (!res.success) { toast('Crash recovery', res.error || 'Failed', 'error'); return; }
-      if (!res.disabled) { toast('Crash recovery', res.message || 'No enabled mods', 'info'); return; }
-      toast('Crash recovery', action === 'disable-all'
-        ? `Disabled ${res.disabled} mods - restarting`
-        : `Disabled ${res.names[0]} - restarting`);
+      if (!res.success) { toast(t('crash.recovery'), res.error || 'Failed', 'error'); return; }
+      if (!res.disabled) { toast(t('crash.recovery'), res.message || t('crash.no_mods'), 'info'); return; }
+      toast(t('crash.recovery'), action === 'disable-all'
+        ? t('crash.disabled_many', { count: res.disabled })
+        : t('crash.disabled_one', { name: res.names[0] }));
       document.getElementById('modal-crash-log')?.classList.remove('active');
       if (typeof loadMods === 'function' && activeProfileId) loadMods(activeProfileId);
       updatePreflight();
@@ -2202,11 +2223,11 @@ if (repairBtn) {
     btn.style.display = 'block';
     btn.textContent = `Roll back to ${res.release.version}`;
     btn.onclick = async () => {
-      if (!window.confirm(`Install Crystal Launcher ${res.release.version} and restart?`)) return;
+      if (!window.confirm(t('settings.rollback_confirm', { version: res.release.version }))) return;
       btn.disabled = true;
       const status = $('rollback-status');
-      if (status) status.textContent = `Downloading ${res.release.version}...`;
-      const r = await window.api.installRelease(res.release.downloadUrl, res.release.version);
+      if (status) status.textContent = t('settings.rollback_downloading', { version: res.release.version });
+      const r = await window.api.installRelease(res.release.downloadUrl, res.release.version, res.release.sha256);
       if (!r.success) {
         if (status) status.textContent = r.error || 'Rollback failed';
         btn.disabled = false;
@@ -2219,6 +2240,19 @@ document.querySelectorAll('.nav-item[data-view="play"]').forEach((el) => {
   el.addEventListener('click', () => setTimeout(updatePreflight, 150));
 });
 setTimeout(updatePreflight, 1200);
+
+// ---------------------------------------------------------------------------
+// CSP-safe wiring for the controls that used to carry inline handlers
+// ---------------------------------------------------------------------------
+document.addEventListener('click', (event) => {
+  const btn = event.target.closest('[data-close]');
+  if (!btn) return;
+  if (btn.hasAttribute('data-skin-close')) {
+    try { stopSkinViewer(); } catch {}
+  }
+  document.getElementById(btn.dataset.close)?.classList.remove('active');
+});
+$('wizard-get-started')?.addEventListener('click', () => showWizardStep(2));
 
 initSettings();
 init();

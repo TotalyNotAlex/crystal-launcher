@@ -185,5 +185,21 @@
   "playtime.week": "This Week",
 
   "toast.saved": "Saved",
-  "toast.error": "Error"
+  "toast.error": "Error",
+  "play.sign_in_again": "Sign in again",
+  "play.session_renewed": "Session renewed",
+  "crash.recovery": "Crash recovery",
+  "crash.disabled_one": "Disabled {name} - restarting",
+  "crash.disabled_many": "Disabled {count} mods - restarting",
+  "crash.no_mods": "No enabled mods in this profile",
+  "settings.checking_files": "Checking libraries and assets...",
+  "settings.repair_progress_check": "Checking files... {current} / {total}",
+  "settings.repair_progress_download": "Downloading repairs... {current} / {total}",
+  "settings.repair_ok": "All {checked} files are intact.",
+  "settings.repair_result": "Repaired {repaired} of {broken} broken files ({checked} checked).",
+  "settings.repair_failed_some": " {failed} could not be repaired.",
+  "settings.repair_nothing": "Nothing to check.",
+  "settings.repair_failed": "Repair failed",
+  "settings.rollback_downloading": "Downloading {version}...",
+  "settings.rollback_confirm": "Install Crystal Launcher {version} and restart?"
 }

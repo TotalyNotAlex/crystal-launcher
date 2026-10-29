@@ -180,5 +180,21 @@
   "worlds.backed_up": "Backup vor dem Löschen erstellt.",
 
   "toast.saved": "Gespeichert",
-  "toast.error": "Fehler"
+  "toast.error": "Fehler",
+  "play.sign_in_again": "Bitte neu anmelden",
+  "play.session_renewed": "Sitzung erneuert",
+  "crash.recovery": "Absturz-Hilfe",
+  "crash.disabled_one": "{name} deaktiviert - Neustart",
+  "crash.disabled_many": "{count} Mods deaktiviert - Neustart",
+  "crash.no_mods": "Keine aktiven Mods in diesem Profil",
+  "settings.checking_files": "Prüfe Libraries und Assets...",
+  "settings.repair_progress_check": "Prüfe Dateien... {current} / {total}",
+  "settings.repair_progress_download": "Lade Reparaturen... {current} / {total}",
+  "settings.repair_ok": "Alle {checked} Dateien sind intakt.",
+  "settings.repair_result": "{repaired} von {broken} beschädigten Dateien repariert ({checked} geprüft).",
+  "settings.repair_failed_some": " {failed} konnten nicht repariert werden.",
+  "settings.repair_nothing": "Nichts zu prüfen.",
+  "settings.repair_failed": "Reparatur fehlgeschlagen",
+  "settings.rollback_downloading": "Lade {version}...",
+  "settings.rollback_confirm": "Crystal Launcher {version} installieren und neu starten?"
 }
