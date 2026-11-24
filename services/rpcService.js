@@ -71,9 +71,35 @@ class RPCService {
   }
 
   #setActivity(activity) {
+    // setActivity callers use the discord-rpc package's camelCase field names,
+    // but this service writes directly to Discord IPC. IPC expects the REST-
+    // style assets/timestamps objects with snake_case keys.
+    const {
+      largeImageKey,
+      largeImageText,
+      smallImageKey,
+      smallImageText,
+      startTimestamp,
+      ...ipcActivity
+    } = activity || {};
+
+    const assets = { ...(ipcActivity.assets || {}) };
+    if (largeImageKey) assets.large_image = largeImageKey;
+    if (largeImageText) assets.large_text = largeImageText;
+    if (smallImageKey) assets.small_image = smallImageKey;
+    if (smallImageText) assets.small_text = smallImageText;
+    if (Object.keys(assets).length) ipcActivity.assets = assets;
+
+    if (startTimestamp !== undefined && startTimestamp !== null) {
+      ipcActivity.timestamps = {
+        ...(ipcActivity.timestamps || {}),
+        start: startTimestamp,
+      };
+    }
+
     this.#send(OP.FRAME, {
       cmd: 'SET_ACTIVITY',
-      args: { activity, pid: process.pid },
+      args: { activity: ipcActivity, pid: process.pid },
       nonce: String(Date.now()),
     });
   }

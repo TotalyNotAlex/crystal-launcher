@@ -256,6 +256,7 @@ function createWindow() {
 
   mainWindow = new BrowserWindow({
     ...bounds,
+    icon: path.join(__dirname, 'icon.ico'),
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
