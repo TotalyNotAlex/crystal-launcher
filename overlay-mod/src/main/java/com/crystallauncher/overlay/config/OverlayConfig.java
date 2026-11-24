@@ -7,6 +7,8 @@ public class OverlayConfig {
     public ElementConfig cps = new ElementConfig(true, 350, 40, 0xFFFFFF, 1.0f);
     public ElementConfig coords = new ElementConfig(true, 350, 55, 0xFFFFFF, 1.0f);
     public ElementConfig biome = new ElementConfig(true, 350, 70, 0xFFFFFF, 1.0f);
+    // Anchored to the bottom-right; x/y are the right and bottom margins.
+    public ElementConfig combat = new ElementConfig(true, 12, 12, 0x5BC8FF, 1.0f);
 
     public static class ElementConfig {
         public boolean enabled;
@@ -38,6 +40,7 @@ public class OverlayConfig {
         c.cps = this.cps.copy();
         c.coords = this.coords.copy();
         c.biome = this.biome.copy();
+        c.combat = this.combat.copy();
         return c;
     }
 

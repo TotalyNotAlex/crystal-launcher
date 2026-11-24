@@ -32,6 +32,9 @@ public class ConfigManager {
                 if (config == null) {
                     config = OverlayConfig.createDefault();
                 }
+                if (config.combat == null) {
+                    config.combat = OverlayConfig.createDefault().combat;
+                }
                 LOGGER.info("Overlay config loaded from {}", configPath);
             } catch (Exception e) {
                 // Catch any JsonSyntaxException, NumberFormatException or IOException

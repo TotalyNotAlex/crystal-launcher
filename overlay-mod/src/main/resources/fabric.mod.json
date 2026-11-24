@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "crystallauncher-overlay",
-  "version": "1.0.0",
+  "version": "${version}",
   "name": "Crystal Launcher Overlay",
   "description": "Feather-style client overlay mod with customizable modules",
   "authors": ["Crystal Launcher"],

@@ -12,6 +12,7 @@ public class HUDRenderer {
     private static final CPSElement cpsElement = new CPSElement();
     private static final CoordsElement coordsElement = new CoordsElement();
     private static final BiomeElement biomeElement = new BiomeElement();
+    private static final CombatElement combatElement = new CombatElement();
 
     public static void render(GuiGraphics graphics) {
         Minecraft mc = Minecraft.getInstance();
@@ -38,6 +39,9 @@ public class HUDRenderer {
         }
         if (cfg.biome.enabled) {
             biomeElement.render(graphics, cfg.biome);
+        }
+        if (cfg.combat.enabled) {
+            combatElement.render(graphics, cfg.combat);
         }
     }
 }

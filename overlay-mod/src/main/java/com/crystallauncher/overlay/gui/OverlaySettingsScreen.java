@@ -51,12 +51,20 @@ public class OverlaySettingsScreen extends Screen {
     private IntSlider biomeYSlider;
     private ScaleSlider biomeScaleSlider;
 
+    // Row 6: compact health, armor, and held-item card
+    private Button combatToggle;
+    private Button combatColorBtn;
+    private IntSlider combatRightSlider;
+    private IntSlider combatBottomSlider;
+    private ScaleSlider combatScaleSlider;
+
     // Preview Renderers
     private final FPSElement fpsRenderer = new FPSElement();
     private final PingElement pingRenderer = new PingElement();
     private final CPSElement cpsRenderer = new CPSElement();
     private final CoordsElement coordsRenderer = new CoordsElement();
     private final BiomeElement biomeRenderer = new BiomeElement();
+    private final CombatElement combatRenderer = new CombatElement();
 
     public OverlaySettingsScreen(Screen parent) {
         super(Component.literal("Overlay Settings"));
@@ -185,8 +193,31 @@ public class OverlaySettingsScreen extends Screen {
         this.addRenderableWidget(biomeYSlider);
         this.addRenderableWidget(biomeScaleSlider);
 
+        // --- ROW 6: COMBAT HUD ---
+        int combatY = biomeY + rowHeight;
+        combatToggle = Button.builder(Component.literal(config.combat.enabled ? "ON" : "OFF"), btn -> {
+            config.combat.enabled = !config.combat.enabled;
+            btn.setMessage(Component.literal(config.combat.enabled ? "ON" : "OFF"));
+        }).bounds(centerX - 160, combatY, 40, 20).build();
+
+        combatColorBtn = Button.builder(Component.literal("Color"), btn -> {
+            if (this.minecraft != null) {
+                this.minecraft.setScreen(new ColorPickerScreen(this, config.combat.color, col -> config.combat.color = col));
+            }
+        }).bounds(centerX - 115, combatY, 45, 20).build();
+
+        combatRightSlider = new IntSlider(centerX - 65, combatY, 70, 20, "Right", config.combat.x, this.width, val -> config.combat.x = val);
+        combatBottomSlider = new IntSlider(centerX + 15, combatY, 70, 20, "Bottom", config.combat.y, this.height, val -> config.combat.y = val);
+        combatScaleSlider = new ScaleSlider(centerX + 95, combatY, 70, 20, "Scale", config.combat.scale, val -> config.combat.scale = val);
+
+        this.addRenderableWidget(combatToggle);
+        this.addRenderableWidget(combatColorBtn);
+        this.addRenderableWidget(combatRightSlider);
+        this.addRenderableWidget(combatBottomSlider);
+        this.addRenderableWidget(combatScaleSlider);
+
         // --- PRESETS ---
-        int presetY = biomeY + 28;
+        int presetY = combatY + 28;
         this.addRenderableWidget(Button.builder(Component.literal("Top Left"), btn -> applyPreset(10, 10, 10, 25, 10, 40, 10, 55, 10, 70)).bounds(centerX - 200, presetY, 70, 20).build());
         this.addRenderableWidget(Button.builder(Component.literal("Top Right"), btn -> {
             int rx = this.width - 110;
@@ -220,6 +251,7 @@ public class OverlaySettingsScreen extends Screen {
             cpsToggle.setMessage(Component.literal(config.cps.enabled ? "ON" : "OFF"));
             coordsToggle.setMessage(Component.literal(config.coords.enabled ? "ON" : "OFF"));
             biomeToggle.setMessage(Component.literal(config.biome.enabled ? "ON" : "OFF"));
+            combatToggle.setMessage(Component.literal(config.combat.enabled ? "ON" : "OFF"));
         }).bounds(centerX + 5, bottomY, 100, 20).build());
     }
 
@@ -252,6 +284,10 @@ public class OverlaySettingsScreen extends Screen {
         biomeXSlider.updateValue(config.biome.x);
         biomeYSlider.updateValue(config.biome.y);
         biomeScaleSlider.updateValue(config.biome.scale);
+
+        combatRightSlider.updateValue(config.combat.x);
+        combatBottomSlider.updateValue(config.combat.y);
+        combatScaleSlider.updateValue(config.combat.scale);
     }
 
     @Override
@@ -267,6 +303,7 @@ public class OverlaySettingsScreen extends Screen {
         graphics.drawString(this.font, "CPS", centerX - 200, 91, 0xFFFFFF, false);
         graphics.drawString(this.font, "Coords", centerX - 200, 116, 0xFFFFFF, false);
         graphics.drawString(this.font, "Biome", centerX - 200, 141, 0xFFFFFF, false);
+        graphics.drawString(this.font, "Combat HUD", centerX - 200, 166, 0xFFFFFF, false);
 
         super.render(graphics, mouseX, mouseY, delta);
 
@@ -277,6 +314,7 @@ public class OverlaySettingsScreen extends Screen {
             if (config.cps.enabled) cpsRenderer.render(graphics, config.cps);
             if (config.coords.enabled) coordsRenderer.render(graphics, config.coords);
             if (config.biome.enabled) biomeRenderer.render(graphics, config.biome);
+            if (config.combat.enabled) combatRenderer.render(graphics, config.combat);
         }
     }
 
