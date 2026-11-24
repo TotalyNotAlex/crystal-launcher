@@ -51,7 +51,7 @@ public class OverlaySettingsScreen extends Screen {
     private IntSlider biomeYSlider;
     private ScaleSlider biomeScaleSlider;
 
-    // Row 6: compact health, armor, and held-item card
+    // Row 6: compact armor and held-item durability list
     private Button combatToggle;
     private Button combatColorBtn;
     private IntSlider combatRightSlider;
@@ -303,7 +303,7 @@ public class OverlaySettingsScreen extends Screen {
         graphics.drawString(this.font, "CPS", centerX - 200, 91, 0xFFFFFF, false);
         graphics.drawString(this.font, "Coords", centerX - 200, 116, 0xFFFFFF, false);
         graphics.drawString(this.font, "Biome", centerX - 200, 141, 0xFFFFFF, false);
-        graphics.drawString(this.font, "Combat HUD", centerX - 200, 166, 0xFFFFFF, false);
+        graphics.drawString(this.font, "Equipment HUD", centerX - 200, 166, 0xFFFFFF, false);
 
         super.render(graphics, mouseX, mouseY, delta);
 
