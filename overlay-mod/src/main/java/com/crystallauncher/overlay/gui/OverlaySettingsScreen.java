@@ -53,7 +53,6 @@ public class OverlaySettingsScreen extends Screen {
 
     // Row 6: compact armor and held-item durability list
     private Button combatToggle;
-    private Button combatColorBtn;
     private IntSlider combatRightSlider;
     private IntSlider combatBottomSlider;
     private ScaleSlider combatScaleSlider;
@@ -200,18 +199,11 @@ public class OverlaySettingsScreen extends Screen {
             btn.setMessage(Component.literal(config.combat.enabled ? "ON" : "OFF"));
         }).bounds(centerX - 160, combatY, 40, 20).build();
 
-        combatColorBtn = Button.builder(Component.literal("Color"), btn -> {
-            if (this.minecraft != null) {
-                this.minecraft.setScreen(new ColorPickerScreen(this, config.combat.color, col -> config.combat.color = col));
-            }
-        }).bounds(centerX - 115, combatY, 45, 20).build();
-
-        combatRightSlider = new IntSlider(centerX - 65, combatY, 70, 20, "Right", config.combat.x, this.width, val -> config.combat.x = val);
-        combatBottomSlider = new IntSlider(centerX + 15, combatY, 70, 20, "Bottom", config.combat.y, this.height, val -> config.combat.y = val);
-        combatScaleSlider = new ScaleSlider(centerX + 95, combatY, 70, 20, "Scale", config.combat.scale, val -> config.combat.scale = val);
+        combatRightSlider = new IntSlider(centerX - 110, combatY, 70, 20, "Right", config.combat.x, this.width, val -> config.combat.x = val);
+        combatBottomSlider = new IntSlider(centerX - 30, combatY, 70, 20, "Bottom", config.combat.y, this.height, val -> config.combat.y = val);
+        combatScaleSlider = new ScaleSlider(centerX + 50, combatY, 70, 20, "Scale", config.combat.scale, val -> config.combat.scale = val);
 
         this.addRenderableWidget(combatToggle);
-        this.addRenderableWidget(combatColorBtn);
         this.addRenderableWidget(combatRightSlider);
         this.addRenderableWidget(combatBottomSlider);
         this.addRenderableWidget(combatScaleSlider);

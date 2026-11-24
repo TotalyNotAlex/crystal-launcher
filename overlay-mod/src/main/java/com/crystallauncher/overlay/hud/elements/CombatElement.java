@@ -36,8 +36,6 @@ public class CombatElement implements HUDElement {
         int panelHeight = equipment.size() * ROW_HEIGHT + 4;
         int panelX = graphics.guiWidth() - cfg.x - (int)Math.ceil(PANEL_WIDTH * cfg.scale);
         int panelY = graphics.guiHeight() - cfg.y - (int)Math.ceil(panelHeight * cfg.scale);
-        int configuredColor = 0xFF000000 | cfg.color;
-
         graphics.pose().pushMatrix();
         graphics.pose().translate((float)panelX, (float)panelY);
         graphics.pose().scale(cfg.scale, cfg.scale);
@@ -54,11 +52,8 @@ public class CombatElement implements HUDElement {
             if (!stack.isDamageableItem()) continue;
             int maxDurability = stack.getMaxDamage();
             int currentDurability = Math.max(0, maxDurability - stack.getDamageValue());
-            float ratio = currentDurability / (float)maxDurability;
-            int color = ratio > 0.6f ? configuredColor
-                    : ratio > 0.3f ? 0xFFFFC94F : 0xFFFF6262;
             graphics.drawString(font, currentDurability + "/" + maxDurability,
-                    VALUE_X, y + 4, color, true);
+                    VALUE_X, y + 4, 0xFFFFFFFF, true);
         }
 
         graphics.pose().popMatrix();
